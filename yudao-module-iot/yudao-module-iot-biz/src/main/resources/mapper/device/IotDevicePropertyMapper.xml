@@ -1,79 +1,90 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<!DOCTYPE mapper
-        PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
-        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
 <mapper namespace="cn.iocoder.yudao.module.iot.dal.tdengine.IotDevicePropertyMapper">
 
     <select id="getProductPropertySTableFieldList" resultType="cn.iocoder.yudao.module.iot.framework.tdengine.core.TDengineTableField">
-        DESCRIBE product_property_${productId}
+        DESCRIBE `boer`.`product_property_${productId}`
     </select>
 
     <update id="createProductPropertySTable">
-        CREATE STABLE product_property_${productId} (
-            ts TIMESTAMP,
-            report_time TIMESTAMP,
+        CREATE STABLE IF NOT EXISTS `boer`.`product_property_${productId}` (
+        `ts` TIMESTAMP,
+        `report_time` TIMESTAMP,
         <foreach item="field" collection="fields" separator=",">
-            ${field.field} ${field.type}
+            `${field.field}` ${field.type}
             <if test="field.length != null and field.length > 0">
                 (${field.length})
             </if>
         </foreach>
         )
         TAGS (
-            device_id BIGINT
+        `device_id` BIGINT
         )
     </update>
 
     <update id="alterProductPropertySTableAddField">
-        ALTER STABLE product_property_${productId}
-        ADD COLUMN ${field.field} ${field.type}
+        ALTER STABLE `boer`.`product_property_${productId}`
+        ADD COLUMN `${field.field}` ${field.type}
         <if test="field.length != null and field.length > 0">
             (${field.length})
         </if>
     </update>
 
     <update id="alterProductPropertySTableModifyField">
-        ALTER STABLE product_property_${productId}
-        MODIFY COLUMN ${field.field} ${field.type}
+        ALTER STABLE `boer`.`product_property_${productId}`
+        MODIFY COLUMN `${field.field}` ${field.type}
         <if test="field.length != null and field.length > 0">
             (${field.length})
         </if>
     </update>
 
     <update id="alterProductPropertySTableDropField">
-        ALTER STABLE product_property_${productId}
-        DROP COLUMN ${field.field}
+        ALTER STABLE `boer`.`product_property_${productId}`
+        DROP COLUMN `${field.field}`
     </update>
 
     <insert id="insert">
-        INSERT INTO device_property_${device.id}
-        USING product_property_${device.productId}
-        TAGS ('${device.id}')
-        (ts, report_time,
-        <foreach item="key" collection="properties.keys" separator=",">
-            ${@cn.hutool.core.util.StrUtil@toUnderlineCase(key)}
-        </foreach>
+        INSERT INTO `boer`.`device_property_${device.id}`
+        USING `boer`.`product_property_${device.productId}`
+        TAGS (${device.id}) (
+        `ts`, `report_time`
+        <if test="properties != null and properties.size() > 0">
+            ,
+            <foreach item="value" index="key" collection="properties" separator=",">
+                `${@cn.hutool.core.util.StrUtil@toUnderlineCase(key)}`
+            </foreach>
+        </if>
         )
-        VALUES
-        (NOW, #{reportTime},
-        <foreach item="value" collection="properties.values" separator=",">
-            #{value}
-        </foreach>
+        VALUES (
+        NOW,
+        <choose>
+            <when test="reportTime instanceof java.lang.Long">${reportTime}</when>
+            <otherwise>'${@cn.hutool.core.date.DateUtil@format(reportTime, "yyyy-MM-dd HH:mm:ss.SSS")}'</otherwise>
+        </choose>
+        <if test="properties != null and properties.size() > 0">
+            ,
+            <foreach item="value" index="key" collection="properties" separator=",">
+                <choose>
+                    <when test="value instanceof java.lang.String">'${value}'</when>
+                    <otherwise>${value != null ? value : 0}</otherwise>
+                </choose>
+            </foreach>
+        </if>
         )
     </insert>
 
     <select id="describeSuperTable" resultType="java.util.Map">
-        DESCRIBE product_property_${productId}
+        DESCRIBE `boer`.`product_property_${productId}`
     </select>
 
     <select id="selectListByHistory"
             resultType="cn.iocoder.yudao.module.iot.controller.admin.device.vo.property.IotDevicePropertyRespVO">
-        SELECT ${@cn.hutool.core.util.StrUtil@toUnderlineCase(reqVO.identifier)} AS `value`, ts AS update_time
-        FROM device_property_${reqVO.deviceId}
-        WHERE ${@cn.hutool.core.util.StrUtil@toUnderlineCase(reqVO.identifier)} IS NOT NULL
-          AND ts BETWEEN ${@cn.hutool.core.date.LocalDateTimeUtil@toEpochMilli(reqVO.times[0])}
+        SELECT `${@cn.hutool.core.util.StrUtil@toUnderlineCase(reqVO.identifier)}` AS `value`, `ts` AS `update_time`
+        FROM `boer`.`device_property_${reqVO.deviceId}`
+        WHERE `${@cn.hutool.core.util.StrUtil@toUnderlineCase(reqVO.identifier)}` IS NOT NULL
+          AND `ts` BETWEEN ${@cn.hutool.core.date.LocalDateTimeUtil@toEpochMilli(reqVO.times[0])}
             AND ${@cn.hutool.core.date.LocalDateTimeUtil@toEpochMilli(reqVO.times[1])}
-        ORDER BY ts DESC
+        ORDER BY `ts` DESC
     </select>
 
 </mapper>

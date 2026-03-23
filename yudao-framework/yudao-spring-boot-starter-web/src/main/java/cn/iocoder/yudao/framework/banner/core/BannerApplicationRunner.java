@@ -29,7 +29,17 @@ public class BannerApplicationRunner implements ApplicationRunner {
                     "https://doc.iocoder.cn/api-doc/",
                     "https://doc.iocoder.cn",
                     "https://t.zsxq.com/02Yf6M7Qn");
-
+            log.info("""
+                    
+                    (♥◠‿◠)ﾉﾞ  波尔启动成功   ლ(´ڡ`ლ)ﾞ \s
+                     ________  ________  _______   ________
+                    |\\   __  \\|\\   __  \\|\\  ___ \\ |\\   __  \\
+                    \\ \\  \\|\\ /\\ \\  \\|\\  \\ \\   __/|\\ \\  \\|\\  \\\s
+                     \\ \\   __  \\ \\  \\\\\\  \\ \\  \\_|/_\\ \\   _  _\\
+                      \\ \\  \\|\\  \\ \\  \\\\\\  \\ \\  \\_|\\ \\ \\  \\\\  \\|
+                       \\ \\_______\\ \\_______\\ \\_______\\ \\__\\\\ _\\
+                        \\|_______|\\|_______|\\|_______|\\|__|\\|__|
+                    """);
             // 数据报表
             if (isNotPresent("cn.iocoder.yudao.module.report.framework.security.config.SecurityConfiguration")) {
                 System.out.println("[报表模块 yudao-module-report - 已禁用][参考 https://doc.iocoder.cn/report/ 开启]");

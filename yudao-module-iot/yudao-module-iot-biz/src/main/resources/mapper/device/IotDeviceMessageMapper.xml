@@ -1,27 +1,25 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<!DOCTYPE mapper
-        PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
-        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
 <mapper namespace="cn.iocoder.yudao.module.iot.dal.tdengine.IotDeviceMessageMapper">
 
     <update id="createSTable">
-        CREATE STABLE IF NOT EXISTS device_message (
-            ts TIMESTAMP,
-            id NCHAR(50),
-            report_time TIMESTAMP,
-            tenant_id BIGINT,
-            server_id NCHAR(50),
-            upstream BOOL,
-            reply BOOL,
-            identifier NCHAR(100),
-            request_id NCHAR(50),
-            method NCHAR(100),
-            params NCHAR(2048),
-            data NCHAR(2048),
-            code INT,
-            msg NCHAR(256)
+        CREATE STABLE IF NOT EXISTS `boer`.`device_message` (
+            `ts` TIMESTAMP,
+            `id` NCHAR(50),
+            `report_time` TIMESTAMP,
+            `tenant_id` BIGINT,
+            `server_id` NCHAR(50),
+            `upstream` BOOL,
+            `reply` BOOL,
+            `identifier` NCHAR(100),
+            `request_id` NCHAR(50),
+            `method` NCHAR(100),
+            `params` NCHAR(2048),
+            `data` NCHAR(2048),
+            `code` INT,
+            `msg` NCHAR(256)
         ) TAGS (
-            device_id BIGINT
+            `device_id` BIGINT
         )
     </update>
 
@@ -30,80 +28,94 @@
     </select>
 
     <insert id="insert">
-        INSERT INTO device_message_${deviceId} (
-            ts, id, report_time, tenant_id, server_id,
-            upstream, reply, identifier, request_id, method,
-            params, data, code, msg
+        INSERT INTO `boer`.`device_message_${deviceId}`
+        USING `boer`.`device_message`
+        TAGS (${deviceId}) (
+        `ts`, `id`, `report_time`, `tenant_id`, `server_id`,
+        `upstream`, `reply`, `identifier`, `request_id`, `method`,
+        `params`, `data`, `code`, `msg`
         )
-        USING device_message
-        TAGS (#{deviceId})
         VALUES (
-            NOW, #{id}, #{reportTime}, #{tenantId},  #{serverId},
-            #{upstream}, #{reply}, #{identifier}, #{requestId}, #{method}, 
-            #{params}, #{data}, #{code}, #{msg}
+        NOW,
+        '${id}',
+        <choose>
+            <when test="reportTime instanceof java.lang.Long">${reportTime}</when>
+            <otherwise>'${@cn.hutool.core.date.DateUtil@format(reportTime, "yyyy-MM-dd HH:mm:ss.SSS")}'</otherwise>
+        </choose>,
+        ${tenantId != null ? tenantId : 0},
+        '${serverId != null ? serverId : ""}',
+        ${upstream != null ? upstream : false},
+        ${reply != null ? reply : false},
+        '${identifier != null ? identifier : ""}',
+        '${requestId != null ? requestId : ""}',
+        '${method != null ? method : ""}',
+        '${params != null ? params : ""}',
+        '${data != null ? data : ""}',
+        ${code != null ? code : 0},
+        '${msg != null ? msg : ""}'
         )
     </insert>
 
     <select id="selectPage" resultType="cn.iocoder.yudao.module.iot.dal.dataobject.device.IotDeviceMessageDO">
-        SELECT ts, id, report_time, tenant_id, server_id,
-               upstream, reply, identifier, request_id, method, 
-               params, data, code, msg
-        FROM device_message_${reqVO.deviceId}
+        SELECT `ts`, `id`, `report_time`, `tenant_id`, `server_id`,
+        `upstream`, `reply`, `identifier`, `request_id`, `method`,
+        `params`, `data`, `code`, `msg`
+        FROM `boer`.`device_message_${reqVO.deviceId}`
         <where>
             <if test="reqVO.method != null and reqVO.method != ''">
-                AND method = #{reqVO.method}
+                AND `method` = '${reqVO.method}'
             </if>
             <if test="reqVO.upstream != null">
-                AND upstream = #{reqVO.upstream}
+                AND `upstream` = ${reqVO.upstream}
             </if>
             <if test="reqVO.reply != null">
-                AND reply = #{reqVO.reply}
+                AND `reply` = ${reqVO.reply}
             </if>
             <if test="reqVO.identifier != null and reqVO.identifier != ''">
-                AND identifier = #{reqVO.identifier}
+                AND `identifier` = '${reqVO.identifier}'
             </if>
         </where>
-        ORDER BY ts DESC
+        ORDER BY `ts` DESC
     </select>
 
     <select id="selectListByRequestIdsAndReply" resultType="cn.iocoder.yudao.module.iot.dal.dataobject.device.IotDeviceMessageDO">
-        SELECT ts, id, report_time, tenant_id, server_id,
-               upstream, reply, identifier, request_id, method, 
-               params, data, code, msg
-        FROM device_message_${deviceId}
-        WHERE reply = #{reply}
-        AND request_id IN
+        SELECT `ts`, `id`, `report_time`, `tenant_id`, `server_id`,
+        `upstream`, `reply`, `identifier`, `request_id`, `method`,
+        `params`, `data`, `code`, `msg`
+        FROM `boer`.`device_message_${deviceId}`
+        WHERE `reply` = ${reply}
+        AND `request_id` IN
         <foreach collection="requestIds" item="requestId" open="(" close=")" separator=",">
-            #{requestId}
+            '${requestId}'
         </foreach>
-        ORDER BY ts DESC
+        ORDER BY `ts` DESC
     </select>
 
     <select id="selectCountByCreateTime" resultType="Long">
         SELECT COUNT(*)
-        FROM device_message
+        FROM `boer`.`device_message`
         <where>
             <if test="createTime != null">
-                AND ts >= #{createTime}
+                AND `ts` >= ${createTime}
             </if>
         </where>
     </select>
 
     <select id="selectDeviceMessageCountGroupByDate" resultType="java.util.Map">
         SELECT
-            TIMETRUNCATE(ts, 1h) AS time,
-            SUM(CASE WHEN upstream = true THEN 1 ELSE 0 END) AS upstream_count,
-            SUM(CASE WHEN upstream = false THEN 1 ELSE 0 END) AS downstream_count
-        FROM device_message
+        TIMETRUNCATE(`ts`, 1h) AS `time`,
+        SUM(CASE WHEN `upstream` = true THEN 1 ELSE 0 END) AS `upstream_count`,
+        SUM(CASE WHEN `upstream` = false THEN 1 ELSE 0 END) AS `downstream_count`
+        FROM `boer`.`device_message`
         <where>
             <if test="startTime != null">
-                AND ts >= #{startTime}
+                AND `ts` >= ${startTime}
             </if>
             <if test="endTime != null">
-                AND ts &lt;= #{endTime}
+                AND `ts` &lt;= ${endTime}
             </if>
         </where>
-        GROUP BY TIMETRUNCATE(ts, 1h)
+        GROUP BY TIMETRUNCATE(`ts`, 1h)
     </select>
 
 </mapper>

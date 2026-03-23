@@ -1,11 +1,12 @@
 package cn.iocoder.yudao.module.iot.framework.tdengine.config;
 
-import cn.iocoder.yudao.module.iot.service.device.message.IotDeviceMessageService;
-import lombok.RequiredArgsConstructor;
-import lombok.extern.slf4j.Slf4j;
 import org.springframework.boot.ApplicationArguments;
 import org.springframework.boot.ApplicationRunner;
 import org.springframework.stereotype.Component;
+
+import cn.iocoder.yudao.module.iot.service.device.message.IotDeviceMessageService;
+import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 
 /**
  * TDengine 表初始化的 Configuration

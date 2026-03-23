@@ -174,8 +174,8 @@ public class IotDevicePropertyServiceImpl implements IotDevicePropertyService {
         if (CollUtil.isEmpty(properties)) {
             log.error("[saveDeviceProperty][消息({}) 没有合法的属性]", message);
         } else {
-            // 2.1 保存设备属性【数据】
-            devicePropertyMapper.insert(device, properties, LocalDateTimeUtil.toEpochMilli(message.getReportTime()));
+            // 2.1 保存设备属性【数据】。兜底：如果 TDengine 表不存在，则自动建表并重试一次
+            insertDevicePropertyWithRetry(device, properties, message);
 
             // 2.2 保存设备属性【日志】
             Map<String, IotDevicePropertyDO> properties2 = convertMap(properties.entrySet(), Map.Entry::getKey, entry ->
@@ -186,6 +186,32 @@ public class IotDevicePropertyServiceImpl implements IotDevicePropertyService {
         // 2.3 提取 GeoLocation 并更新设备定位
         // 为什么 properties 为空，也要执行定位更新？因为可能上报的属性里，没有合法属性，但是包含 GeoLocation 定位属性
         extractAndUpdateDeviceLocation(device, (Map<?, ?>) message.getParams());
+    }
+
+    private void insertDevicePropertyWithRetry(IotDeviceDO device, Map<String, Object> properties, IotDeviceMessage message) {
+        Long reportTime = LocalDateTimeUtil.toEpochMilli(message.getReportTime());
+        try {
+            devicePropertyMapper.insert(device, properties, reportTime);
+            return;
+        } catch (Exception ex) {
+            if (!isTableNotExistException(ex)) {
+                throw ex;
+            }
+            log.warn("[insertDevicePropertyWithRetry][产品({}) 属性表不存在，自动同步后重试。deviceId={}]", device.getProductId(), device.getId(), ex);
+        }
+        defineDevicePropertyData(device.getProductId());
+        devicePropertyMapper.insert(device, properties, reportTime);
+    }
+
+    private boolean isTableNotExistException(Throwable throwable) {
+        while (throwable != null) {
+            String message = throwable.getMessage();
+            if (message != null && message.contains("Table does not exist")) {
+                return true;
+            }
+            throwable = throwable.getCause();
+        }
+        return false;
     }
 
     @Override
