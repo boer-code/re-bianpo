@@ -18,6 +18,7 @@ import cn.iocoder.yudao.module.iot.dal.dataobject.device.IotDeviceModbusPointDO;
 import cn.iocoder.yudao.module.iot.dal.dataobject.product.IotProductDO;
 import cn.iocoder.yudao.module.iot.service.device.IotDeviceModbusConfigService;
 import cn.iocoder.yudao.module.iot.service.device.IotDeviceModbusPointService;
+import cn.iocoder.yudao.module.iot.service.device.IotDevicePayloadMappingService;
 import cn.iocoder.yudao.module.iot.service.device.IotDeviceService;
 import cn.iocoder.yudao.module.iot.service.product.IotProductService;
 import jakarta.annotation.Resource;
@@ -57,6 +58,8 @@ public class IoTDeviceApiImpl implements IotDeviceCommonApi {
     @Resource
     @Lazy // 延迟加载，解决循环依赖
     private IotDeviceModbusPointService modbusPointService;
+    @Resource
+    private IotDevicePayloadMappingService payloadMappingService;
 
     @Override
     @PostMapping(RpcConstants.RPC_API_PREFIX + "/iot/device/auth")
@@ -71,6 +74,19 @@ public class IoTDeviceApiImpl implements IotDeviceCommonApi {
     public CommonResult<IotDeviceRespDTO> getDevice(@RequestBody IotDeviceGetReqDTO getReqDTO) {
         IotDeviceDO device = getReqDTO.getId() != null ? deviceService.getDeviceFromCache(getReqDTO.getId())
                 : deviceService.getDeviceFromCache(getReqDTO.getProductKey(), getReqDTO.getDeviceName());
+        return success(BeanUtils.toBean(device, IotDeviceRespDTO.class, deviceDTO -> {
+            IotProductDO product = productService.getProductFromCache(deviceDTO.getProductId());
+            if (product != null) {
+                deviceDTO.setProtocolType(product.getProtocolType()).setSerializeType(product.getSerializeType());
+            }
+        }));
+    }
+
+    @Override
+    @PostMapping(RpcConstants.RPC_API_PREFIX + "/iot/device/auto-register")
+    @PermitAll
+    public CommonResult<IotDeviceRespDTO> autoRegisterDevice(@RequestBody IotDeviceAutoRegisterReqDTO reqDTO) {
+        IotDeviceDO device = deviceService.autoRegisterDevice(reqDTO);
         return success(BeanUtils.toBean(device, IotDeviceRespDTO.class, deviceDTO -> {
             IotProductDO product = productService.getProductFromCache(deviceDTO.getProductId());
             if (product != null) {
@@ -123,6 +139,14 @@ public class IoTDeviceApiImpl implements IotDeviceCommonApi {
             result.add(configDTO);
         }
         return success(result);
+    }
+
+    @Override
+    @PostMapping(RpcConstants.RPC_API_PREFIX + "/iot/device/payload-mapping/enabled-list")
+    @PermitAll
+    public CommonResult<List<IotDevicePayloadMappingRespDTO>> getEnabledPayloadMappings(@RequestBody Long deviceId) {
+        return success(BeanUtils.toBean(payloadMappingService.getEnabledMappingsByDeviceId(deviceId),
+                IotDevicePayloadMappingRespDTO.class));
     }
 
     @Override

@@ -15,6 +15,7 @@ import cn.iocoder.yudao.framework.tenant.core.aop.TenantIgnore;
 import cn.iocoder.yudao.framework.tenant.core.util.TenantUtils;
 import cn.iocoder.yudao.module.iot.controller.admin.device.vo.device.*;
 import cn.iocoder.yudao.module.iot.core.biz.dto.IotDeviceAuthReqDTO;
+import cn.iocoder.yudao.module.iot.core.biz.dto.IotDeviceAutoRegisterReqDTO;
 import cn.iocoder.yudao.module.iot.core.biz.dto.IotSubDeviceRegisterFullReqDTO;
 import cn.iocoder.yudao.module.iot.core.enums.IotDeviceMessageMethodEnum;
 import cn.iocoder.yudao.module.iot.core.enums.device.IotDeviceStateEnum;
@@ -289,6 +290,67 @@ public class IotDeviceServiceImpl implements IotDeviceService {
     @TenantIgnore // 忽略租户信息，跨租户 productKey + deviceName 是唯一的
     public IotDeviceDO getDeviceFromCache(String productKey, String deviceName) {
         return deviceMapper.selectByProductKeyAndDeviceName(productKey, deviceName);
+    }
+
+    @Override
+    public IotDeviceDO autoRegisterDevice(IotDeviceAutoRegisterReqDTO reqDTO) {
+        // 1. 参数校验
+        if (StrUtil.hasBlank(reqDTO.getProductKey(), reqDTO.getAreaNo(), reqDTO.getDeviceNo())) {
+            throw exception(DEVICE_SUB_REGISTER_PARAMS_INVALID);
+        }
+
+        // 2. 校验产品并切换租户上下文
+        IotProductDO product = TenantUtils.executeIgnore(() ->
+                productService.getProductByProductKey(reqDTO.getProductKey()));
+        if (product == null) {
+            throw exception(PRODUCT_NOT_EXISTS);
+        }
+        return TenantUtils.execute(product.getTenantId(), () -> autoRegisterDevice0(product, reqDTO));
+    }
+
+    private IotDeviceDO autoRegisterDevice0(IotProductDO product, IotDeviceAutoRegisterReqDTO reqDTO) {
+        String serialNumber = buildRawSerialNumber(reqDTO.getProductKey(), reqDTO.getAreaNo(), reqDTO.getDeviceNo());
+        IotDeviceDO existBySerial = deviceMapper.selectBySerialNumber(serialNumber);
+        if (existBySerial != null) {
+            return existBySerial;
+        }
+
+        String rawDeviceName = buildRawDeviceName(reqDTO.getAreaNo(), reqDTO.getDeviceNo());
+        // 确保同产品下 deviceName 唯一，若冲突自动追加序号
+        String finalDeviceName = rawDeviceName;
+        int suffix = 1;
+        while (deviceMapper.selectByProductKeyAndDeviceName(product.getProductKey(), finalDeviceName) != null) {
+            finalDeviceName = rawDeviceName + "_" + suffix;
+            suffix++;
+        }
+
+        IotDeviceSaveReqVO createReqVO = new IotDeviceSaveReqVO()
+                .setDeviceName(finalDeviceName)
+                .setNickname("RAW-" + reqDTO.getAreaNo() + "-" + reqDTO.getDeviceNo())
+                .setProductId(product.getId())
+                .setSerialNumber(serialNumber)
+                .setConfig(buildRawConfig(reqDTO.getAreaNo(), reqDTO.getDeviceNo()));
+        IotDeviceDO device = createDevice0(createReqVO);
+        log.info("[autoRegisterDevice0][产品({}) 自动注册设备({})，AN={}，DN={}]",
+                reqDTO.getProductKey(), finalDeviceName, reqDTO.getAreaNo(), reqDTO.getDeviceNo());
+        return device;
+    }
+
+    private String buildRawDeviceName(String areaNo, String deviceNo) {
+        return "raw_" + areaNo + "_" + deviceNo;
+    }
+
+    private String buildRawSerialNumber(String productKey, String areaNo, String deviceNo) {
+        return productKey + ":" + areaNo + ":" + deviceNo;
+    }
+
+    private String buildRawConfig(String areaNo, String deviceNo) {
+        Map<String, Object> config = new HashMap<>();
+        config.put("rawAutoRegistered", true);
+        config.put("initialized", false);
+        config.put("areaNo", areaNo);
+        config.put("deviceNo", deviceNo);
+        return JsonUtils.toJsonString(config);
     }
 
     @Override

@@ -15,6 +15,7 @@ import cn.iocoder.yudao.module.iot.gateway.protocol.mqtt.handler.downstream.IotM
 import cn.iocoder.yudao.module.iot.gateway.protocol.mqtt.handler.downstream.IotMqttDownstreamSubscriber;
 import cn.iocoder.yudao.module.iot.gateway.protocol.mqtt.handler.upstream.IotMqttAuthHandler;
 import cn.iocoder.yudao.module.iot.gateway.protocol.mqtt.handler.upstream.IotMqttRegisterHandler;
+import cn.iocoder.yudao.module.iot.gateway.protocol.mqtt.handler.upstream.IotMqttRawUpstreamHandler;
 import cn.iocoder.yudao.module.iot.gateway.protocol.mqtt.handler.upstream.IotMqttUpstreamHandler;
 import cn.iocoder.yudao.module.iot.gateway.protocol.mqtt.manager.IotMqttConnectionManager;
 import cn.iocoder.yudao.module.iot.gateway.service.device.message.IotDeviceMessageService;
@@ -88,6 +89,7 @@ public class IotMqttProtocol implements IotProtocol {
     private final IotMqttAuthHandler authHandler;
     private final IotMqttRegisterHandler registerHandler;
     private final IotMqttUpstreamHandler upstreamHandler;
+    private final IotMqttRawUpstreamHandler rawUpstreamHandler;
 
     public IotMqttProtocol(ProtocolProperties properties) {
         IotMqttConfig mqttConfig = properties.getMqtt();
@@ -101,9 +103,10 @@ public class IotMqttProtocol implements IotProtocol {
         // 初始化 Handler
         this.deviceMessageService = SpringUtil.getBean(IotDeviceMessageService.class);
         IotDeviceCommonApi deviceApi = SpringUtil.getBean(IotDeviceCommonApi.class);
-        this.authHandler = new IotMqttAuthHandler(connectionManager, deviceMessageService, deviceApi, serverId);
+        this.authHandler = new IotMqttAuthHandler(connectionManager, deviceMessageService, deviceApi, serverId, mqttConfig);
         this.registerHandler = new IotMqttRegisterHandler(connectionManager, deviceMessageService);
         this.upstreamHandler = new IotMqttUpstreamHandler(connectionManager, deviceMessageService, serverId);
+        this.rawUpstreamHandler = new IotMqttRawUpstreamHandler(deviceApi, deviceMessageService, mqttConfig, serverId);
     }
 
     @Override
@@ -219,7 +222,16 @@ public class IotMqttProtocol implements IotProtocol {
     private void handleEndpoint(MqttEndpoint endpoint) {
         // 1. 如果是注册请求，注册待认证连接；否则走正常认证流程
         String clientId = endpoint.clientIdentifier();
-        if (StrUtil.endWith(clientId, AUTH_TYPE_REGISTER)) {
+        IotMqttConfig mqttConfig = properties.getMqtt();
+        // 只从配置读取一次 adminClientId，减少重复访问
+        String adminClientId = mqttConfig.getAdminClientId();
+        if (adminClientId.equals(clientId)) {
+            // 情况三：管理员认证请求
+            if (!authHandler.handleAdminAuthenticationRequest(endpoint)) {
+                endpoint.reject(MqttConnectReturnCode.CONNECTION_REFUSED_BAD_USER_NAME_OR_PASSWORD);
+                return;
+            }
+        } else if (StrUtil.endWith(clientId, AUTH_TYPE_REGISTER)) {
             // 情况一：设备注册请求
             registerHandler.handleRegister(endpoint);
             return;
@@ -256,6 +268,12 @@ public class IotMqttProtocol implements IotProtocol {
             List<MqttQoS> grantedQoSLevels = new ArrayList<>();
             for (MqttTopicSubscription sub : subscribe.topicSubscriptions()) {
                 String topicName = sub.topicName();
+                // 如果设备是管理员主题，则直接订阅
+                if (clientId.equals(mqttConfig.getAdminClientId())) {
+                    grantedQoSLevels.add(sub.qualityOfService());
+                    log.debug("[handleEndpoint][订阅成功，客户端 ID: {}，主题: {}]", clientId, topicName);
+                    continue;
+                } else 
                 // 校验主题是否属于当前设备
                 if (connectionInfo != null && IotMqttTopicUtils.isTopicSubscribeAllowed(
                         topicName, connectionInfo.getProductKey(), connectionInfo.getDeviceName())) {
@@ -290,7 +308,11 @@ public class IotMqttProtocol implements IotProtocol {
             // 1. 处理业务消息
             String topic = message.topicName();
             byte[] payload = message.payload().getBytes();
-            upstreamHandler.handleBusinessRequest(endpoint, topic, payload);
+            if (StrUtil.equals(topic, properties.getMqtt().getRawTopicUp())) {
+                rawUpstreamHandler.handleRawPayload(payload);
+            } else {
+                upstreamHandler.handleBusinessRequest(endpoint, topic, payload);
+            }
 
             // 2. 根据 QoS 级别发送相应的确认消息
             handleQoSAck(endpoint, message);

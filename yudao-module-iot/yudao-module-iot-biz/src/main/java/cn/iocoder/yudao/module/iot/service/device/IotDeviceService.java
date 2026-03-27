@@ -3,6 +3,7 @@ package cn.iocoder.yudao.module.iot.service.device;
 import cn.iocoder.yudao.framework.common.pojo.PageResult;
 import cn.iocoder.yudao.module.iot.controller.admin.device.vo.device.*;
 import cn.iocoder.yudao.module.iot.core.biz.dto.IotDeviceAuthReqDTO;
+import cn.iocoder.yudao.module.iot.core.biz.dto.IotDeviceAutoRegisterReqDTO;
 import cn.iocoder.yudao.module.iot.core.biz.dto.IotSubDeviceRegisterFullReqDTO;
 import cn.iocoder.yudao.module.iot.core.enums.device.IotDeviceStateEnum;
 import cn.iocoder.yudao.module.iot.core.mq.message.IotDeviceMessage;
@@ -126,6 +127,14 @@ public interface IotDeviceService {
      * @return 设备信息
      */
     IotDeviceDO getDeviceFromCache(String productKey, String deviceName);
+
+    /**
+     * 按 AN + DN 自动注册设备（不存在则创建）
+     *
+     * @param reqDTO 自动注册参数
+     * @return 设备
+     */
+    IotDeviceDO autoRegisterDevice(IotDeviceAutoRegisterReqDTO reqDTO);
 
     /**
      * 获得设备分页

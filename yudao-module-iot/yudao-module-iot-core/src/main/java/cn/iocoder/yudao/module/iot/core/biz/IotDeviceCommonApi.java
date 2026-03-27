@@ -32,6 +32,22 @@ public interface IotDeviceCommonApi {
     CommonResult<IotDeviceRespDTO> getDevice(IotDeviceGetReqDTO infoReqDTO);
 
     /**
+     * 按 AN + DN 自动注册并返回设备信息
+     *
+     * @param reqDTO 自动注册请求
+     * @return 设备信息
+     */
+    CommonResult<IotDeviceRespDTO> autoRegisterDevice(IotDeviceAutoRegisterReqDTO reqDTO);
+
+    /**
+     * 查询设备的报文字段映射（仅启用项）
+     *
+     * @param deviceId 设备编号
+     * @return 映射列表
+     */
+    CommonResult<List<IotDevicePayloadMappingRespDTO>> getEnabledPayloadMappings(Long deviceId);
+
+    /**
      * 直连/网关设备动态注册（一型一密）
      *
      * @param reqDTO 动态注册请求
