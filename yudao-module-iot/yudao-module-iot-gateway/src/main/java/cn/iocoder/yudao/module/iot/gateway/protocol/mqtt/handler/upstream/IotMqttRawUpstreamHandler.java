@@ -12,7 +12,9 @@ import cn.iocoder.yudao.module.iot.core.biz.dto.IotDevicePayloadMappingRespDTO;
 import cn.iocoder.yudao.module.iot.core.biz.dto.IotDeviceRespDTO;
 import cn.iocoder.yudao.module.iot.core.enums.IotDeviceMessageMethodEnum;
 import cn.iocoder.yudao.module.iot.core.mq.message.IotDeviceMessage;
+import cn.iocoder.yudao.module.iot.core.topic.state.IotDeviceStateUpdateReqDTO;
 import cn.iocoder.yudao.module.iot.core.topic.property.IotDevicePropertyPostReqDTO;
+import cn.iocoder.yudao.module.iot.core.enums.device.IotDeviceStateEnum;
 import cn.iocoder.yudao.module.iot.gateway.protocol.mqtt.IotMqttConfig;
 import cn.iocoder.yudao.module.iot.gateway.service.device.message.IotDeviceMessageService;
 import lombok.extern.slf4j.Slf4j;
@@ -92,6 +94,13 @@ public class IotMqttRawUpstreamHandler {
             properties.put(mapping.getThingModelIdentifier(), value);
         }
         if (properties.isEmpty()) {
+            // 心跳包或尚未配置映射时，也写入一条上行状态消息，保证“消息统计”和设备在线状态可见
+            if (isHeartbeatPayload(payloadMap)) {
+                IotDeviceMessage heartbeatMessage = IotDeviceMessage.requestOf(
+                        IotDeviceMessageMethodEnum.STATE_UPDATE.getMethod(),
+                        new IotDeviceStateUpdateReqDTO(IotDeviceStateEnum.ONLINE.getState()));
+                deviceMessageService.sendDeviceMessage(heartbeatMessage, device.getProductKey(), device.getDeviceName(), serverId);
+            }
             return;
         }
 
@@ -109,7 +118,15 @@ public class IotMqttRawUpstreamHandler {
         if (bitIndex < 1 || bitIndex > 7) {
             return true;
         }
-        return (cl & (1 << (bitIndex - 1))) != 0;
+        // 协议约定：高 7 位有效（bit7..bit1），bit0 保留
+        // bit7~bit1 分别代表 U3/U4/U5/A1/A2/D2/D1
+        int actualBit = 8 - bitIndex; // bitIndex=1->bit7, 2->bit6, ... 7->bit1
+        return (cl & (1 << actualBit)) != 0;
+    }
+
+    private boolean isHeartbeatPayload(Map<String, Object> payloadMap) {
+        // 心跳报文约定包含 HN，且通常不携带业务采集点位
+        return payloadMap.containsKey("HN");
     }
 
     private Object transformValue(Object rawValue, String formula, BigDecimal zeroOffset) {

@@ -11,6 +11,9 @@ import com.baomidou.mybatisplus.core.conditions.query.QueryWrapper;
 import com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper;
 import jakarta.annotation.Nullable;
 import org.apache.ibatis.annotations.Mapper;
+import org.apache.ibatis.annotations.Param;
+import org.apache.ibatis.annotations.Select;
+import org.apache.ibatis.annotations.Update;
 
 import java.time.LocalDateTime;
 import java.util.Collection;
@@ -89,6 +92,71 @@ public interface IotDeviceMapper extends BaseMapperX<IotDeviceDO> {
     default IotDeviceDO selectBySerialNumber(String serialNumber) {
         return selectOne(IotDeviceDO::getSerialNumber, serialNumber);
     }
+
+    /**
+     * 查询设备（包含逻辑删除记录）
+     */
+    @Select("""
+            SELECT *
+            FROM iot_device
+            WHERE tenant_id = #{tenantId}
+              AND product_id = #{productId}
+              AND device_name = #{deviceName}
+            ORDER BY id DESC
+            LIMIT 1
+            """)
+    IotDeviceDO selectByUniqueKeyIncludeDeleted(@Param("tenantId") Long tenantId,
+                                                @Param("productId") Long productId,
+                                                @Param("deviceName") String deviceName);
+
+    /**
+     * 根据序列号查询设备（包含逻辑删除记录）
+     */
+    @Select("""
+            SELECT *
+            FROM iot_device
+            WHERE serial_number = #{serialNumber}
+            ORDER BY id DESC
+            LIMIT 1
+            """)
+    IotDeviceDO selectBySerialNumberIncludeDeleted(@Param("serialNumber") String serialNumber);
+
+    /**
+     * 复活自动注册设备（将逻辑删除记录恢复为可用）
+     */
+    @Update("""
+            UPDATE iot_device
+            SET deleted = b'0',
+                tenant_id = #{tenantId},
+                product_id = #{productId},
+                product_key = #{productKey},
+                device_name = #{deviceName},
+                nickname = #{nickname},
+                serial_number = #{serialNumber},
+                device_type = #{deviceType},
+                state = #{state},
+                device_secret = #{deviceSecret},
+                config = #{config},
+                gateway_id = NULL,
+                online_time = NULL,
+                offline_time = NULL,
+                active_time = NULL,
+                firmware_id = NULL,
+                latitude = NULL,
+                longitude = NULL
+            WHERE id = #{id}
+            """)
+    int reviveAutoRegisteredDevice(@Param("id") Long id,
+                                   @Param("tenantId") Long tenantId,
+                                   @Param("productId") Long productId,
+                                   @Param("productKey") String productKey,
+                                   @Param("deviceName") String deviceName,
+                                   @Param("nickname") String nickname,
+                                   @Param("serialNumber") String serialNumber,
+                                   @Param("deviceType") Integer deviceType,
+                                   @Param("state") Integer state,
+                                   @Param("deviceSecret") String deviceSecret,
+                                   @Param("config") String config);
 
     /**
      * 查询指定产品下的设备数量

@@ -46,6 +46,7 @@ import org.springframework.cache.annotation.CacheEvict;
 import org.springframework.cache.annotation.Cacheable;
 import org.springframework.cache.annotation.Caching;
 import org.springframework.context.annotation.Lazy;
+import org.springframework.dao.DuplicateKeyException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.validation.annotation.Validated;
@@ -145,8 +146,10 @@ public class IotDeviceServiceImpl implements IotDeviceService {
     }
 
     private void initDevice(IotDeviceDO device, IotProductDO product) {
-        device.setProductId(product.getId()).setProductKey(product.getProductKey())
-                .setDeviceType(product.getDeviceType())
+        device.setProductId(product.getId())
+                .setProductKey(product.getProductKey())
+                .setTenantId(product.getTenantId());
+        device.setDeviceType(product.getDeviceType())
                 .setDeviceSecret(generateDeviceSecret()) // 生成密钥
                 .setState(IotDeviceStateEnum.INACTIVE.getState()); // 默认未激活
     }
@@ -316,6 +319,19 @@ public class IotDeviceServiceImpl implements IotDeviceService {
         }
 
         String rawDeviceName = buildRawDeviceName(reqDTO.getAreaNo(), reqDTO.getDeviceNo());
+        // 长期修复：命中逻辑删除记录时直接复活，避免唯一键（tenant_id, product_id, device_name）被“墓碑数据”占用
+        IotDeviceDO deletedByUnique = deviceMapper.selectByUniqueKeyIncludeDeleted(
+                product.getTenantId(), product.getId(), rawDeviceName);
+        if (deletedByUnique != null && BooleanUtil.isTrue(deletedByUnique.getDeleted())) {
+            return reviveAutoRegisteredDevice(deletedByUnique, product, rawDeviceName, serialNumber,
+                    reqDTO.getAreaNo(), reqDTO.getDeviceNo());
+        }
+        IotDeviceDO deletedBySerial = deviceMapper.selectBySerialNumberIncludeDeleted(serialNumber);
+        if (deletedBySerial != null && BooleanUtil.isTrue(deletedBySerial.getDeleted())) {
+            return reviveAutoRegisteredDevice(deletedBySerial, product, deletedBySerial.getDeviceName(), serialNumber,
+                    reqDTO.getAreaNo(), reqDTO.getDeviceNo());
+        }
+
         // 确保同产品下 deviceName 唯一，若冲突自动追加序号
         String finalDeviceName = rawDeviceName;
         int suffix = 1;
@@ -330,7 +346,26 @@ public class IotDeviceServiceImpl implements IotDeviceService {
                 .setProductId(product.getId())
                 .setSerialNumber(serialNumber)
                 .setConfig(buildRawConfig(reqDTO.getAreaNo(), reqDTO.getDeviceNo()));
-        IotDeviceDO device = createDevice0(createReqVO);
+        IotDeviceDO device;
+        try {
+            device = createDevice0(createReqVO);
+        } catch (DuplicateKeyException ex) {
+            // 并发自动注册时，可能出现“先查不存在、后插入唯一键冲突”，此时回查并返回已存在设备，保证幂等
+            IotDeviceDO existAfterConflict = deviceMapper.selectBySerialNumber(serialNumber);
+            if (existAfterConflict == null) {
+                existAfterConflict = deviceMapper.selectByProductKeyAndDeviceName(product.getProductKey(), finalDeviceName);
+            }
+            if (existAfterConflict != null) {
+                return existAfterConflict;
+            }
+            IotDeviceDO deletedAfterConflict = deviceMapper.selectByUniqueKeyIncludeDeleted(
+                    product.getTenantId(), product.getId(), finalDeviceName);
+            if (deletedAfterConflict != null && BooleanUtil.isTrue(deletedAfterConflict.getDeleted())) {
+                return reviveAutoRegisteredDevice(deletedAfterConflict, product, finalDeviceName, serialNumber,
+                        reqDTO.getAreaNo(), reqDTO.getDeviceNo());
+            }
+            throw ex;
+        }
         log.info("[autoRegisterDevice0][产品({}) 自动注册设备({})，AN={}，DN={}]",
                 reqDTO.getProductKey(), finalDeviceName, reqDTO.getAreaNo(), reqDTO.getDeviceNo());
         return device;
@@ -351,6 +386,37 @@ public class IotDeviceServiceImpl implements IotDeviceService {
         config.put("areaNo", areaNo);
         config.put("deviceNo", deviceNo);
         return JsonUtils.toJsonString(config);
+    }
+
+    private IotDeviceDO reviveAutoRegisteredDevice(IotDeviceDO deletedDevice,
+                                                   IotProductDO product,
+                                                   String deviceName,
+                                                   String serialNumber,
+                                                   String areaNo,
+                                                   String deviceNo) {
+        String nickname = "RAW-" + areaNo + "-" + deviceNo;
+        String config = buildRawConfig(areaNo, deviceNo);
+        int rows = deviceMapper.reviveAutoRegisteredDevice(
+                deletedDevice.getId(),
+                product.getTenantId(),
+                product.getId(),
+                product.getProductKey(),
+                deviceName,
+                nickname,
+                serialNumber,
+                product.getDeviceType(),
+                IotDeviceStateEnum.INACTIVE.getState(),
+                generateDeviceSecret(),
+                config);
+        if (rows <= 0) {
+            throw new IllegalStateException("复活自动注册设备失败，id=" + deletedDevice.getId());
+        }
+        IotDeviceDO revived = deviceMapper.selectById(deletedDevice.getId());
+        if (revived != null) {
+            deleteDeviceCache(revived);
+            return revived;
+        }
+        throw new IllegalStateException("复活自动注册设备后查询失败，id=" + deletedDevice.getId());
     }
 
     @Override

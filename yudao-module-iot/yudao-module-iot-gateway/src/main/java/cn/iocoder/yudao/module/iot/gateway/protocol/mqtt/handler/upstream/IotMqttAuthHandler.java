@@ -9,6 +9,7 @@ import cn.iocoder.yudao.module.iot.core.biz.dto.IotDeviceRespDTO;
 import cn.iocoder.yudao.module.iot.core.mq.message.IotDeviceMessage;
 import cn.iocoder.yudao.module.iot.core.topic.IotDeviceIdentity;
 import cn.iocoder.yudao.module.iot.core.util.IotDeviceAuthUtils;
+import cn.iocoder.yudao.module.iot.gateway.protocol.mqtt.IotMqttConfig;
 import cn.iocoder.yudao.module.iot.gateway.protocol.mqtt.manager.IotMqttConnectionManager;
 import cn.iocoder.yudao.module.iot.gateway.service.device.IotDeviceService;
 import cn.iocoder.yudao.module.iot.gateway.service.device.message.IotDeviceMessageService;
@@ -32,15 +33,18 @@ public class IotMqttAuthHandler extends IotMqttAbstractHandler {
     private final IotDeviceCommonApi deviceApi;
     private final IotDeviceService deviceService;
     private final String serverId;
+    private final IotMqttConfig mqttConfig;
 
     public IotMqttAuthHandler(IotMqttConnectionManager connectionManager,
                               IotDeviceMessageService deviceMessageService,
                               IotDeviceCommonApi deviceApi,
-                              String serverId) {
+                              String serverId,
+                              IotMqttConfig mqttConfig) {
         super(connectionManager, deviceMessageService);
         this.deviceApi = deviceApi;
         this.deviceService = SpringUtil.getBean(IotDeviceService.class);
         this.serverId = serverId;
+        this.mqttConfig = mqttConfig;
     }
 
     /**
@@ -116,4 +120,22 @@ public class IotMqttAuthHandler extends IotMqttAbstractHandler {
         log.info("[sendOnlineMessage][设备上线，设备 ID: {}，设备名称: {}]", device.getId(), device.getDeviceName());
     }
 
+    public boolean handleAdminAuthenticationRequest(MqttEndpoint endpoint) {
+        String clientId = endpoint.clientIdentifier();
+        String username = endpoint.auth() != null ? endpoint.auth().getUsername() : null;
+        String password = endpoint.auth() != null ? endpoint.auth().getPassword() : null;
+        log.info("[handleAdminAuthenticationRequest][管理员认证请求，客户端 ID: {}，用户名: {}，地址: {}]",
+                clientId, username, connectionManager.getEndpointAddress(endpoint));
+        if (!mqttConfig.getAdminClientId().equals(clientId)) {
+            return false;
+        }
+        if (!mqttConfig.getAdminUsername().equals(username)) {
+            return false;
+        }
+        if (!mqttConfig.getAdminPassword().equals(password)) {
+            return false;
+        }
+        log.info("[handleAdminAuthenticationRequest][管理员认证成功，建立连接，客户端 ID: {}，用户名: {}]", clientId, username);
+        return true;
+    }
 }
