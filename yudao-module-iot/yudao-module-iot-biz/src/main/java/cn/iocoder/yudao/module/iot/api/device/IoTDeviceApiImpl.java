@@ -144,6 +144,7 @@ public class IoTDeviceApiImpl implements IotDeviceCommonApi {
     @Override
     @PostMapping(RpcConstants.RPC_API_PREFIX + "/iot/device/payload-mapping/enabled-list")
     @PermitAll
+    @TenantIgnore
     public CommonResult<List<IotDevicePayloadMappingRespDTO>> getEnabledPayloadMappings(@RequestBody Long deviceId) {
         return success(BeanUtils.toBean(payloadMappingService.getEnabledMappingsByDeviceId(deviceId),
                 IotDevicePayloadMappingRespDTO.class));

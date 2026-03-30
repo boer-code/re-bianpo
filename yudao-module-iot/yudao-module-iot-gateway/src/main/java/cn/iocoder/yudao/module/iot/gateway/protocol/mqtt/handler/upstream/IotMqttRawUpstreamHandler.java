@@ -5,6 +5,7 @@ import cn.hutool.core.map.MapUtil;
 import cn.hutool.core.math.Calculator;
 import cn.hutool.core.util.NumberUtil;
 import cn.hutool.core.util.StrUtil;
+import cn.iocoder.yudao.framework.common.pojo.CommonResult;
 import cn.iocoder.yudao.framework.common.util.json.JsonUtils;
 import cn.iocoder.yudao.module.iot.core.biz.IotDeviceCommonApi;
 import cn.iocoder.yudao.module.iot.core.biz.dto.IotDeviceAutoRegisterReqDTO;
@@ -63,14 +64,26 @@ public class IotMqttRawUpstreamHandler {
         registerReq.setProductKey(mqttConfig.getRawRegisterProductKey());
         registerReq.setAreaNo(areaNo);
         registerReq.setDeviceNo(deviceNo);
-        IotDeviceRespDTO device = deviceApi.autoRegisterDevice(registerReq).getCheckedData();
+        CommonResult<IotDeviceRespDTO> registerResult = deviceApi.autoRegisterDevice(registerReq);
+        if (registerResult.isError()) {
+            log.error("[handleRawPayload][自动注册失败，AN={}，DN={}，code={}，msg={}，payload={}]",
+                    areaNo, deviceNo, registerResult.getCode(), registerResult.getMsg(), JsonUtils.toJsonString(payloadMap));
+            return;
+        }
+        IotDeviceRespDTO device = registerResult.getData();
         if (device == null) {
+            log.warn("[handleRawPayload][自动注册返回空设备，AN={}，DN={}，payload={}]", areaNo, deviceNo, JsonUtils.toJsonString(payloadMap));
             return;
         }
 
         // 2. 查询设备映射
-        List<IotDevicePayloadMappingRespDTO> mappings = deviceApi.getEnabledPayloadMappings(device.getId())
-                .getCheckedData();
+        CommonResult<List<IotDevicePayloadMappingRespDTO>> mappingResult = deviceApi.getEnabledPayloadMappings(device.getId());
+        if (mappingResult.isError()) {
+            log.error("[handleRawPayload][查询映射失败，deviceId={}，code={}，msg={}，payload={}]",
+                    device.getId(), mappingResult.getCode(), mappingResult.getMsg(), JsonUtils.toJsonString(payloadMap));
+            return;
+        }
+        List<IotDevicePayloadMappingRespDTO> mappings = mappingResult.getData();
         if (mappings == null || mappings.isEmpty()) {
             log.debug("[handleRawPayload][设备({}/{}) 暂无映射配置，deviceId={}]", areaNo, deviceNo, device.getId());
             return;

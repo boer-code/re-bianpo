@@ -304,6 +304,7 @@ public class IotMqttProtocol implements IotProtocol {
      */
     private void processMessage(MqttEndpoint endpoint, MqttPublishMessage message) {
         String clientId = endpoint.clientIdentifier();
+        String address = connectionManager.getEndpointAddress(endpoint);
         try {
             // 1. 处理业务消息
             String topic = message.topicName();
@@ -317,8 +318,13 @@ public class IotMqttProtocol implements IotProtocol {
             // 2. 根据 QoS 级别发送相应的确认消息
             handleQoSAck(endpoint, message);
         } catch (Exception e) {
-            log.error("[processMessage][消息处理失败，断开连接，客户端 ID: {}，地址: {}，错误: {}]",
-                    clientId, connectionManager.getEndpointAddress(endpoint), e.getMessage());
+            log.error("[processMessage][消息处理失败，客户端 ID: {}，地址: {}，topic: {}]",
+                    clientId, address, message.topicName(), e);
+            // 管理员连接用于统一原始上报，不因单条消息失败强制断开，避免反复重连放大故障
+            if (StrUtil.equals(clientId, properties.getMqtt().getAdminClientId())) {
+                handleQoSAck(endpoint, message);
+                return;
+            }
             endpoint.close();
         }
     }
