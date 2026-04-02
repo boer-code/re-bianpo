@@ -38,10 +38,6 @@ public class IotDevicePayloadMappingDO extends TenantBaseDO {
      */
     private String thingModelIdentifier;
     /**
-     * CL 位索引（1-7）
-     */
-    private Integer clBitIndex;
-    /**
      * 公式，变量名固定为 x
      */
     private String formula;

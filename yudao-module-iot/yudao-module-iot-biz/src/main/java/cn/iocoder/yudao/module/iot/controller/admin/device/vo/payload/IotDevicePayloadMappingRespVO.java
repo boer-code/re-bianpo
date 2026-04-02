@@ -18,8 +18,6 @@ public class IotDevicePayloadMappingRespVO {
     private String channelKey;
     @Schema(description = "物模型标识符", example = "temperature")
     private String thingModelIdentifier;
-    @Schema(description = "CL 位索引", example = "7")
-    private Integer clBitIndex;
     @Schema(description = "换算公式", example = "x * 0.1")
     private String formula;
     @Schema(description = "归零偏移量", example = "0.15")

@@ -186,7 +186,6 @@ CREATE TABLE IF NOT EXISTS "iot_device_payload_mapping" (
     "device_id" bigint NOT NULL,
     "channel_key" varchar(64) NOT NULL DEFAULT '',
     "thing_model_identifier" varchar(64) NOT NULL DEFAULT '',
-    "cl_bit_index" tinyint DEFAULT NULL,
     "formula" varchar(255) DEFAULT NULL,
     "zero_offset" numeric(24, 8) DEFAULT NULL,
     "direction" tinyint NOT NULL DEFAULT '2',

@@ -4,7 +4,6 @@ CREATE TABLE IF NOT EXISTS `iot_device_payload_mapping` (
   `device_id` bigint NOT NULL COMMENT '设备ID',
   `channel_key` varchar(64) NOT NULL DEFAULT '' COMMENT '报文字段键，例如 U3D1',
   `thing_model_identifier` varchar(64) NOT NULL DEFAULT '' COMMENT '物模型标识符',
-  `cl_bit_index` tinyint DEFAULT NULL COMMENT 'CL 位索引（1-7）',
   `formula` varchar(255) DEFAULT NULL COMMENT '换算公式，变量名 x',
   `zero_offset` decimal(24,8) DEFAULT NULL COMMENT '归零偏移量',
   `direction` tinyint NOT NULL DEFAULT '2' COMMENT '映射方向 0上行 1下行 2双向',

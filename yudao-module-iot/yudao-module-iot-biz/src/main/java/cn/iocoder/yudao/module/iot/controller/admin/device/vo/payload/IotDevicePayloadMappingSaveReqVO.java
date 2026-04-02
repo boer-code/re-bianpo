@@ -26,9 +26,6 @@ public class IotDevicePayloadMappingSaveReqVO {
     @NotBlank(message = "物模型标识符不能为空")
     private String thingModelIdentifier;
 
-    @Schema(description = "CL 位索引（1-7）", example = "7")
-    private Integer clBitIndex;
-
     @Schema(description = "换算公式", example = "x * 0.1 - 50")
     private String formula;
 
