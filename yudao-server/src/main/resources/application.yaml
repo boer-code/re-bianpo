@@ -36,6 +36,12 @@ server:
       charset: UTF-8 # 必须设置 UTF-8，避免 WebFlux 流式返回（AI 场景）会乱码问题
       force: true
 
+--- #################### IoT 相关配置 ####################
+
+yudao:
+  iot:
+    raw-product-key: raw_product
+
 --- #################### 接口文档配置 ####################
 
 springdoc:
