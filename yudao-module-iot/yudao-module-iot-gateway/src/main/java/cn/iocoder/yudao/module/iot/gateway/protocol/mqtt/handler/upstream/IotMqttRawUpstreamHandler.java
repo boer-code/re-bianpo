@@ -77,6 +77,16 @@ public class IotMqttRawUpstreamHandler {
             return;
         }
 
+        // 心跳报文独立处理：不进入 RAW 数据映射流程，避免触发“开始处理 raw 上报”等业务日志
+        if (isHeartbeatPayload(payloadMap)) {
+            IotDeviceMessage heartbeatMessage = IotDeviceMessage.requestOf(
+                    IotDeviceMessageMethodEnum.STATE_UPDATE.getMethod(),
+                    new IotDeviceStateUpdateReqDTO(IotDeviceStateEnum.ONLINE.getState()));
+            log.info("[handleRawPayload][心跳上报 ONLINE deviceId={} AN={} DN={}]", device.getId(), areaNo, deviceNo);
+            deviceMessageService.sendDeviceMessage(heartbeatMessage, device.getProductKey(), device.getDeviceName(), serverId);
+            return;
+        }
+
         // 2. 查询设备映射
         CommonResult<List<IotDevicePayloadMappingRespDTO>> mappingResult = deviceApi.getEnabledPayloadMappings(device.getId());
         if (mappingResult.isError()) {
@@ -146,14 +156,6 @@ public class IotMqttRawUpstreamHandler {
         if (properties.isEmpty()) {
             log.info("[handleRawPayload][无属性可上报 deviceId={} AN={} DN={} CL={}（检查 CL 是否开启对应模块、报文是否含 channelKey、映射方向）]",
                     device.getId(), areaNo, deviceNo, cl);
-            // 心跳包或尚未配置映射时，也写入一条上行状态消息，保证“消息统计”和设备在线状态可见
-            if (isHeartbeatPayload(payloadMap)) {
-                IotDeviceMessage heartbeatMessage = IotDeviceMessage.requestOf(
-                        IotDeviceMessageMethodEnum.STATE_UPDATE.getMethod(),
-                        new IotDeviceStateUpdateReqDTO(IotDeviceStateEnum.ONLINE.getState()));
-                log.info("[handleRawPayload][心跳上报 ONLINE deviceId={} AN={} DN={}]", device.getId(), areaNo, deviceNo);
-                deviceMessageService.sendDeviceMessage(heartbeatMessage, device.getProductKey(), device.getDeviceName(), serverId);
-            }
             return;
         }
 
