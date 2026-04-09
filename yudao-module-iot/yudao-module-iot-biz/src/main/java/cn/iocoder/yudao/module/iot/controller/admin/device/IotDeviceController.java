@@ -18,6 +18,7 @@ import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.Parameters;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.annotation.Resource;
+import jakarta.annotation.security.PermitAll;
 import jakarta.servlet.http.HttpServletResponse;
 import jakarta.validation.Valid;
 import org.springframework.security.access.prepost.PreAuthorize;
@@ -193,7 +194,7 @@ public class IotDeviceController {
 
     @GetMapping("/location-list")
     @Operation(summary = "获取设备位置列表", description = "获取有经纬度信息的设备列表，用于地图展示")
-    @PreAuthorize("@ss.hasPermission('iot:device:query')")
+    @PermitAll
     public CommonResult<List<IotDeviceRespVO>> getDeviceLocationList() {
         // 1. 获取有位置信息的设备列表
         List<IotDeviceDO> devices = deviceService.getDeviceListByHasLocation();
