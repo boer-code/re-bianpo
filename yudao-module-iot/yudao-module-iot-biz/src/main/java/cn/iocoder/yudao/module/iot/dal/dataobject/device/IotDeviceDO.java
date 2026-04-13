@@ -128,6 +128,10 @@ public class IotDeviceDO extends TenantBaseDO {
      * 设备位置的经度
      */
     private BigDecimal longitude;
+    /**
+     * 设备位置的海拔（米）
+     */
+    private BigDecimal altitude;
 
     /**
      * 设备配置

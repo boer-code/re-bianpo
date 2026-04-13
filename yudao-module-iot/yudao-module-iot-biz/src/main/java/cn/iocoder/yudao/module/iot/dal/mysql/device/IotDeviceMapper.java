@@ -143,7 +143,8 @@ public interface IotDeviceMapper extends BaseMapperX<IotDeviceDO> {
                 active_time = NULL,
                 firmware_id = NULL,
                 latitude = NULL,
-                longitude = NULL
+                longitude = NULL,
+                altitude = NULL
             WHERE id = #{id}
             """)
     int reviveAutoRegisteredDevice(@Param("id") Long id,
@@ -197,6 +198,13 @@ public interface IotDeviceMapper extends BaseMapperX<IotDeviceDO> {
         return selectList(new LambdaQueryWrapperX<IotDeviceDO>()
                 .isNotNull(IotDeviceDO::getLatitude)
                 .isNotNull(IotDeviceDO::getLongitude));
+    }
+
+    default List<IotDeviceDO> selectListByGroupIdWithLocation(Long groupId) {
+        return selectList(new LambdaQueryWrapperX<IotDeviceDO>()
+                .isNotNull(IotDeviceDO::getLatitude)
+                .isNotNull(IotDeviceDO::getLongitude)
+                .apply("FIND_IN_SET(" + groupId + ",group_ids) > 0"));
     }
 
     // ========== 网关-子设备绑定相关 ==========

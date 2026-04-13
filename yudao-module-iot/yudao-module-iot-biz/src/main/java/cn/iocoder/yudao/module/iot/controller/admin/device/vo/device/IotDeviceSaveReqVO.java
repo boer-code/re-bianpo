@@ -49,4 +49,7 @@ public class IotDeviceSaveReqVO {
     @DecimalMax(value = "180", message = "经度范围为 -180 到 180")
     private BigDecimal longitude;
 
+    @Schema(description = "设备位置的海拔（米）", example = "35.50")
+    private BigDecimal altitude;
+
 }
