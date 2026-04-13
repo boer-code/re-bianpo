@@ -292,6 +292,14 @@ public interface IotDeviceService {
      */
     List<IotDeviceDO> getDeviceListByHasLocation();
 
+    /**
+     * 按分组获得有位置信息的设备列表
+     *
+     * @param groupId 分组编号
+     * @return 设备列表
+     */
+    List<IotDeviceDO> getDeviceListByGroupIdWithLocation(Long groupId);
+
     // ========== 网关-拓扑管理（后台操作） ==========
 
     /**

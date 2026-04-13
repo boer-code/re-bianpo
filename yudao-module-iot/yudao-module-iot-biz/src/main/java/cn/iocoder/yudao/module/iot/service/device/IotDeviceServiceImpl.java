@@ -696,6 +696,11 @@ public class IotDeviceServiceImpl implements IotDeviceService {
         return deviceMapper.selectListByHasLocation();
     }
 
+    @Override
+    public List<IotDeviceDO> getDeviceListByGroupIdWithLocation(Long groupId) {
+        return deviceMapper.selectListByGroupIdWithLocation(groupId);
+    }
+
     // ========== 网关-拓扑管理（后台操作） ==========
 
     @Override

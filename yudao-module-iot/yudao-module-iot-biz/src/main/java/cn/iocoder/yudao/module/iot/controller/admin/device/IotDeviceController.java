@@ -212,6 +212,24 @@ public class IotDeviceController {
         }));
     }
 
+    @GetMapping("/location-list-by-group")
+    @Operation(summary = "按分组获取设备位置列表", description = "获取指定分组下有经纬度信息的设备列表，用于 3D 山体展示")
+    @Parameter(name = "groupId", description = "分组编号", required = true, example = "1")
+    @PermitAll
+    public CommonResult<List<IotDeviceRespVO>> getDeviceLocationListByGroup(@RequestParam("groupId") Long groupId) {
+        List<IotDeviceDO> devices = deviceService.getDeviceListByGroupIdWithLocation(groupId);
+        if (CollUtil.isEmpty(devices)) {
+            return success(Collections.emptyList());
+        }
+        Map<Long, IotProductDO> productMap = convertMap(productService.getProductList(), IotProductDO::getId);
+        return success(convertList(devices, device -> {
+            IotDeviceRespVO respVO = BeanUtils.toBean(device, IotDeviceRespVO.class);
+            MapUtils.findAndThen(productMap, device.getProductId(),
+                    product -> respVO.setProductName(product.getName()));
+            return respVO;
+        }));
+    }
+
     @PostMapping("/import")
     @Operation(summary = "导入设备")
     @PreAuthorize("@ss.hasPermission('iot:device:import')")

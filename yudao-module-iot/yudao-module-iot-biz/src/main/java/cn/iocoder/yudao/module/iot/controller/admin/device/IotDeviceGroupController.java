@@ -78,11 +78,13 @@ public class IotDeviceGroupController {
     }
 
     @GetMapping("/simple-list")
-    @Operation(summary = "获取设备分组的精简信息列表", description = "只包含被开启的分组，主要用于前端的下拉选项")
+    @Operation(summary = "获取设备分组的精简信息列表", description = "只包含被开启的分组，主要用于前端的下拉选项；含各分组设备数量，供首页统计等使用")
     public CommonResult<List<IotDeviceGroupRespVO>> getSimpleDeviceGroupList() {
         List<IotDeviceGroupDO> list = deviceGroupService.getDeviceGroupListByStatus(CommonStatusEnum.ENABLE.getStatus());
-        return success(convertList(list, group -> // 只返回 id、name 字段
-                new IotDeviceGroupRespVO().setId(group.getId()).setName(group.getName())));
+        return success(convertList(list, group -> new IotDeviceGroupRespVO()
+                .setId(group.getId())
+                .setName(group.getName())
+                .setDeviceCount(deviceService.getDeviceCountByGroupId(group.getId()))));
     }
 
 }

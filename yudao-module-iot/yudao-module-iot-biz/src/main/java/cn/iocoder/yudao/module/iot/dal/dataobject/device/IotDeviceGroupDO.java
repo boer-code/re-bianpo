@@ -6,6 +6,8 @@ import com.baomidou.mybatisplus.annotation.TableId;
 import com.baomidou.mybatisplus.annotation.TableName;
 import lombok.*;
 
+import java.math.BigDecimal;
+
 /**
  * IoT 设备分组 DO
  *
@@ -38,5 +40,21 @@ public class IotDeviceGroupDO extends BaseDO {
      * 分组描述
      */
     private String description;
+    /**
+     * 所在地区编号
+     */
+    private Long regionId;
+    /**
+     * 站点经度
+     */
+    private BigDecimal longitude;
+    /**
+     * 站点纬度
+     */
+    private BigDecimal latitude;
+    /**
+     * 站点海拔（米）
+     */
+    private BigDecimal altitude;
 
 }
