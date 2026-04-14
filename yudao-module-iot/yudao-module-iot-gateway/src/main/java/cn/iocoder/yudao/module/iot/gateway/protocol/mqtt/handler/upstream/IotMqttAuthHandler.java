@@ -124,18 +124,18 @@ public class IotMqttAuthHandler extends IotMqttAbstractHandler {
         String clientId = endpoint.clientIdentifier();
         String username = endpoint.auth() != null ? endpoint.auth().getUsername() : null;
         String password = endpoint.auth() != null ? endpoint.auth().getPassword() : null;
-        log.info("[handleAdminAuthenticationRequest][管理员认证请求，客户端 ID: {}，用户名: {}，地址: {}]",
+        log.info("[handleAdminAuthenticationRequest][raw设备认证请求，客户端 ID: {}，用户名: {}，地址: {}]",
                 clientId, username, connectionManager.getEndpointAddress(endpoint));
-        if (!mqttConfig.getAdminClientId().equals(clientId)) {
+        if (!mqttConfig.getRawClientId().equals(clientId)) {
             return false;
         }
-        if (!mqttConfig.getAdminUsername().equals(username)) {
+        if (!mqttConfig.getRawUsername().equals(username)) {
             return false;
         }
-        if (!mqttConfig.getAdminPassword().equals(password)) {
+        if (!mqttConfig.getRawPassword().equals(password)) {
             return false;
         }
-        log.info("[handleAdminAuthenticationRequest][管理员认证成功，建立连接，客户端 ID: {}，用户名: {}]", clientId, username);
+        log.info("[handleAdminAuthenticationRequest][raw设备认证成功，建立连接，客户端 ID: {}，用户名: {}]", clientId, username);
         return true;
     }
 }

@@ -223,10 +223,10 @@ public class IotMqttProtocol implements IotProtocol {
         // 1. 如果是注册请求，注册待认证连接；否则走正常认证流程
         String clientId = endpoint.clientIdentifier();
         IotMqttConfig mqttConfig = properties.getMqtt();
-        // 只从配置读取一次 adminClientId，减少重复访问
-        String adminClientId = mqttConfig.getAdminClientId();
-        if (adminClientId.equals(clientId)) {
-            // 情况三：管理员认证请求
+        // 只从配置读取一次 rawClientId，减少重复访问
+        String rawClientId = mqttConfig.getRawClientId();
+        if (rawClientId.equals(clientId)) {
+            // 情况三：raw设备认证请求
             if (!authHandler.handleAdminAuthenticationRequest(endpoint)) {
                 endpoint.reject(MqttConnectReturnCode.CONNECTION_REFUSED_BAD_USER_NAME_OR_PASSWORD);
                 return;
@@ -268,8 +268,8 @@ public class IotMqttProtocol implements IotProtocol {
             List<MqttQoS> grantedQoSLevels = new ArrayList<>();
             for (MqttTopicSubscription sub : subscribe.topicSubscriptions()) {
                 String topicName = sub.topicName();
-                // 如果设备是管理员主题，则直接订阅
-                if (clientId.equals(mqttConfig.getAdminClientId())) {
+                // 如果设备是raw设备主题，则直接订阅
+                if (clientId.equals(mqttConfig.getRawClientId())) {
                     grantedQoSLevels.add(sub.qualityOfService());
                     log.debug("[handleEndpoint][订阅成功，客户端 ID: {}，主题: {}]", clientId, topicName);
                     continue;
@@ -320,8 +320,8 @@ public class IotMqttProtocol implements IotProtocol {
         } catch (Exception e) {
             log.error("[processMessage][消息处理失败，客户端 ID: {}，地址: {}，topic: {}]",
                     clientId, address, message.topicName(), e);
-            // 管理员连接用于统一原始上报，不因单条消息失败强制断开，避免反复重连放大故障
-            if (StrUtil.equals(clientId, properties.getMqtt().getAdminClientId())) {
+            // raw连接用于统一原始上报，不因单条消息失败强制断开，避免反复重连放大故障
+            if (StrUtil.equals(clientId, properties.getMqtt().getRawClientId())) {
                 handleQoSAck(endpoint, message);
                 return;
             }

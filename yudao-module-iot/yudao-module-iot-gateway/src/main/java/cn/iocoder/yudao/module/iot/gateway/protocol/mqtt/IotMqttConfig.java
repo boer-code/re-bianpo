@@ -28,22 +28,22 @@ public class IotMqttConfig {
     private Integer connectTimeoutSeconds = 60;
 
     /**
-     * 管理员设备ID
+     * raw设备ID
      */
-    @NotNull(message = "管理员设备ID不能为空")
-    private String adminClientId = "admin";
+    @NotNull(message = "raw设备ID不能为空")
+    private String rawClientId = "admin";
 
     /**
-     * 管理员用户名
+     * raw用户名
      */
-    @NotNull(message = "管理员用户名不能为空")
-    private String adminUsername = "admin";
+    @NotNull(message = "raw用户名不能为空")
+    private String rawUsername = "admin";
     
     /**
-     * 管理员密码
+     * raw设备密码
      */
-    @NotNull(message = "管理员密码不能为空")
-    private String adminPassword = "admin";
+    @NotNull(message = "raw密码不能为空")
+    private String rawPassword = "admin";
 
     /**
      * 统一原始上报主题
