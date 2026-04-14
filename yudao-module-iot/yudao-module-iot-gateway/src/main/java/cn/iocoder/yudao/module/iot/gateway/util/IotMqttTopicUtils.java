@@ -98,6 +98,19 @@ public final class IotMqttTopicUtils {
     }
 
     /**
+     * 构建 raw 共享连接回复主题
+     *
+     * @param rawTopicUp 统一原始上报主题
+     * @return raw 回复主题（rawTopicUp + "/reply"）
+     */
+    public static String buildRawReplyTopic(String rawTopicUp) {
+        if (StrUtil.isBlank(rawTopicUp)) {
+            return null;
+        }
+        return StrUtil.removeSuffix(rawTopicUp, "/") + "/reply";
+    }
+
+    /**
      * 校验主题是否允许订阅
      * <p>
      * 规则：主题必须以 /sys/{productKey}/{deviceName}/ 开头，

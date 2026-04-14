@@ -90,6 +90,7 @@ public class IotMqttProtocol implements IotProtocol {
     private final IotMqttRegisterHandler registerHandler;
     private final IotMqttUpstreamHandler upstreamHandler;
     private final IotMqttRawUpstreamHandler rawUpstreamHandler;
+    private final IotDeviceCommonApi deviceApi;
 
     public IotMqttProtocol(ProtocolProperties properties) {
         IotMqttConfig mqttConfig = properties.getMqtt();
@@ -102,7 +103,7 @@ public class IotMqttProtocol implements IotProtocol {
 
         // 初始化 Handler
         this.deviceMessageService = SpringUtil.getBean(IotDeviceMessageService.class);
-        IotDeviceCommonApi deviceApi = SpringUtil.getBean(IotDeviceCommonApi.class);
+        this.deviceApi = SpringUtil.getBean(IotDeviceCommonApi.class);
         this.authHandler = new IotMqttAuthHandler(connectionManager, deviceMessageService, deviceApi, serverId, mqttConfig);
         this.registerHandler = new IotMqttRegisterHandler(connectionManager, deviceMessageService);
         this.upstreamHandler = new IotMqttUpstreamHandler(connectionManager, deviceMessageService, serverId);
@@ -156,7 +157,8 @@ public class IotMqttProtocol implements IotProtocol {
 
             // 2. 启动下行消息订阅者
             IotMessageBus messageBus = SpringUtil.getBean(IotMessageBus.class);
-            IotMqttDownstreamHandler downstreamHandler = new IotMqttDownstreamHandler(deviceMessageService, connectionManager);
+            IotMqttDownstreamHandler downstreamHandler = new IotMqttDownstreamHandler(
+                    deviceMessageService, connectionManager, deviceApi, mqttConfig);
             this.downstreamSubscriber = new IotMqttDownstreamSubscriber(this, downstreamHandler, messageBus);
             this.downstreamSubscriber.start();
         } catch (Exception e) {
@@ -231,6 +233,7 @@ public class IotMqttProtocol implements IotProtocol {
                 endpoint.reject(MqttConnectReturnCode.CONNECTION_REFUSED_BAD_USER_NAME_OR_PASSWORD);
                 return;
             }
+            connectionManager.registerRawSharedConnection(endpoint);
         } else if (StrUtil.endWith(clientId, AUTH_TYPE_REGISTER)) {
             // 情况一：设备注册请求
             registerHandler.handleRegister(endpoint);
@@ -353,6 +356,10 @@ public class IotMqttProtocol implements IotProtocol {
      */
     private void cleanupConnection(MqttEndpoint endpoint) {
         try {
+            IotMqttConfig mqttConfig = properties.getMqtt();
+            if (StrUtil.equals(endpoint.clientIdentifier(), mqttConfig.getRawClientId())) {
+                connectionManager.unregisterRawSharedConnection(endpoint);
+            }
             // 1. 发送设备离线消息
             IotMqttConnectionManager.ConnectionInfo connectionInfo = connectionManager.getConnectionInfo(endpoint);
             if (connectionInfo != null) {
