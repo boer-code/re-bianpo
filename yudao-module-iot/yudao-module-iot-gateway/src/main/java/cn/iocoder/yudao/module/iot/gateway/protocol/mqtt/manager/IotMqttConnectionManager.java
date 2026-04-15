@@ -12,7 +12,6 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
-import java.util.Set;
 
 /**
  * IoT 网关 MQTT 连接管理器
@@ -42,10 +41,6 @@ public class IotMqttConnectionManager {
      * 设备 ID -> MqttEndpoint 的映射
      */
     private final Map<Long, MqttEndpoint> deviceEndpointMap = new ConcurrentHashMap<>();
-    /**
-     * raw 共享连接集合（统一原始上报连接）
-     */
-    private final Set<MqttEndpoint> rawSharedEndpoints = ConcurrentHashMap.newKeySet();
 
     /**
      * 安全获取 endpoint 地址
@@ -167,61 +162,6 @@ public class IotMqttConnectionManager {
     }
 
     /**
-     * 注册 raw 共享连接
-     *
-     * @param endpoint MQTT 连接端点
-     */
-    public void registerRawSharedConnection(MqttEndpoint endpoint) {
-        rawSharedEndpoints.add(endpoint);
-        log.info("[registerRawSharedConnection][注册 raw 共享连接，连接: {}，当前在线 raw 连接数: {}]",
-                getEndpointAddress(endpoint), rawSharedEndpoints.size());
-    }
-
-    /**
-     * 注销 raw 共享连接
-     *
-     * @param endpoint MQTT 连接端点
-     */
-    public void unregisterRawSharedConnection(MqttEndpoint endpoint) {
-        if (rawSharedEndpoints.remove(endpoint)) {
-            log.info("[unregisterRawSharedConnection][注销 raw 共享连接，连接: {}，当前在线 raw 连接数: {}]",
-                    getEndpointAddress(endpoint), rawSharedEndpoints.size());
-        }
-    }
-
-    /**
-     * 发送消息到 raw 共享连接
-     *
-     * @param topic   主题
-     * @param payload 消息内容
-     * @param qos     服务质量
-     * @param retain  是否保留消息
-     * @return 是否发送成功
-     */
-    public boolean sendToRawSharedConnection(String topic, byte[] payload, int qos, boolean retain) {
-        if (rawSharedEndpoints.isEmpty()) {
-            log.warn("[sendToRawSharedConnection][raw 共享连接离线，无法发送消息，主题: {}]", topic);
-            return false;
-        }
-        int successCount = 0;
-        for (MqttEndpoint endpoint : rawSharedEndpoints) {
-            try {
-                endpoint.publish(topic, Buffer.buffer(payload), MqttQoS.valueOf(qos), false, retain);
-                successCount++;
-            } catch (Exception e) {
-                log.error("[sendToRawSharedConnection][发送消息失败，连接: {}，主题: {}，错误: {}]",
-                        getEndpointAddress(endpoint), topic, e.getMessage());
-            }
-        }
-        if (successCount > 0) {
-            log.debug("[sendToRawSharedConnection][发送消息成功，主题: {}，QoS: {}，成功连接数: {}]",
-                    topic, qos, successCount);
-            return true;
-        }
-        return false;
-    }
-
-    /**
      * 获取设备连接端点
      */
     public MqttEndpoint getDeviceEndpoint(Long deviceId) {
@@ -234,8 +174,6 @@ public class IotMqttConnectionManager {
     public void closeAll() {
         // 1. 先复制再清空，避免 closeHandler 回调时并发修改
         List<MqttEndpoint> endpoints = new ArrayList<>(connectionMap.keySet());
-        endpoints.addAll(rawSharedEndpoints);
-        rawSharedEndpoints.clear();
         connectionMap.clear();
         deviceEndpointMap.clear();
         // 2. 关闭所有连接（closeHandler 中 unregisterConnection 发现 map 为空会安全跳过）
