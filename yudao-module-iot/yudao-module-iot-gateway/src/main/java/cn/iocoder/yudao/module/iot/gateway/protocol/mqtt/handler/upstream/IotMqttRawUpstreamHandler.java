@@ -12,15 +12,17 @@ import cn.iocoder.yudao.module.iot.core.biz.dto.IotDeviceAutoRegisterReqDTO;
 import cn.iocoder.yudao.module.iot.core.biz.dto.IotDevicePayloadMappingRespDTO;
 import cn.iocoder.yudao.module.iot.core.biz.dto.IotDeviceRespDTO;
 import cn.iocoder.yudao.module.iot.core.enums.IotDeviceMessageMethodEnum;
-import cn.iocoder.yudao.module.iot.core.mq.message.IotDeviceMessage;
-import cn.iocoder.yudao.module.iot.core.topic.state.IotDeviceStateUpdateReqDTO;
-import cn.iocoder.yudao.module.iot.core.topic.property.IotDevicePropertyPostReqDTO;
 import cn.iocoder.yudao.module.iot.core.enums.device.IotDeviceStateEnum;
+import cn.iocoder.yudao.module.iot.core.mq.message.IotDeviceMessage;
+import cn.iocoder.yudao.module.iot.core.topic.property.IotDevicePropertyPostReqDTO;
+import cn.iocoder.yudao.module.iot.core.topic.state.IotDeviceStateUpdateReqDTO;
 import cn.iocoder.yudao.module.iot.gateway.protocol.mqtt.IotMqttConfig;
 import cn.iocoder.yudao.module.iot.gateway.service.device.message.IotDeviceMessageService;
 import lombok.extern.slf4j.Slf4j;
 
 import java.math.BigDecimal;
+import java.time.LocalDateTime;
+import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
@@ -31,6 +33,12 @@ import java.util.Map;
  */
 @Slf4j
 public class IotMqttRawUpstreamHandler {
+
+    private static final DateTimeFormatter RAW_REPORT_TIME_FORMATTER = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss");
+
+    private static final int MAX_FUTURE_SKEW_MINUTES = 5; //上报时间最大未来漂移分钟数
+
+    private static final int MAX_HISTORY_DAYS = 90; //上报时间最大历史天数
 
     private final IotDeviceCommonApi deviceApi;
     private final IotDeviceMessageService deviceMessageService;
@@ -67,22 +75,28 @@ public class IotMqttRawUpstreamHandler {
         registerReq.setDeviceNo(deviceNo);
         CommonResult<IotDeviceRespDTO> registerResult = deviceApi.autoRegisterDevice(registerReq);
         if (registerResult.isError()) {
-            log.error("[handleRawPayload][自动注册失败，AN={}，DN={}，code={}，msg={}，payload={}]",
+            log.error("[handleRawPayload][获取设备信息，AN={}，DN={}，code={}，msg={}，payload={}]",
                     areaNo, deviceNo, registerResult.getCode(), registerResult.getMsg(), JsonUtils.toJsonString(payloadMap));
             return;
         }
         IotDeviceRespDTO device = registerResult.getData();
         if (device == null) {
-            log.warn("[handleRawPayload][自动注册返回空设备，AN={}，DN={}，payload={}]", areaNo, deviceNo, JsonUtils.toJsonString(payloadMap));
+            log.warn("[handleRawPayload][后端返回空设备，AN={}，DN={}，payload={}]", areaNo, deviceNo, JsonUtils.toJsonString(payloadMap));
             return;
         }
+
+        // 统一解析设备上报时间（优先 DAY+TIM），用于补发缓存数据按真实采集时间入库
+        LocalDateTime reportTime = resolveReportTime(payloadMap, device.getId(), areaNo, deviceNo);
+        LocalDateTime serverReceiveTime = LocalDateTime.now();
 
         // 心跳报文独立处理：不进入 RAW 数据映射流程，避免触发“开始处理 raw 上报”等业务日志
         if (isHeartbeatPayload(payloadMap)) {
             IotDeviceMessage heartbeatMessage = IotDeviceMessage.requestOf(
                     IotDeviceMessageMethodEnum.STATE_UPDATE.getMethod(),
-                    new IotDeviceStateUpdateReqDTO(IotDeviceStateEnum.ONLINE.getState()));
-            log.info("[handleRawPayload][心跳上报 ONLINE deviceId={} AN={} DN={}]", device.getId(), areaNo, deviceNo);
+                    new IotDeviceStateUpdateReqDTO(IotDeviceStateEnum.ONLINE.getState()))
+                    .setReportTime(reportTime);
+            log.info("[handleRawPayload][心跳上报 ONLINE deviceId={} AN={} DN={} deviceReportTime={} serverReceiveTime={}]",
+                    device.getId(), areaNo, deviceNo, reportTime, serverReceiveTime);
             deviceMessageService.sendDeviceMessage(heartbeatMessage, device.getProductKey(), device.getDeviceName(), serverId);
             return;
         }
@@ -159,15 +173,56 @@ public class IotMqttRawUpstreamHandler {
             return;
         }
 
-        log.info("[handleRawPayload][thing.property.post deviceId={} AN={} DN={} productKey={} deviceName={} 明细: {}]",
+        log.debug("[handleRawPayload][thing.property.post 处理明细 deviceId={} AN={} DN={} productKey={} deviceName={}: {}]",
                 device.getId(), areaNo, deviceNo, device.getProductKey(), device.getDeviceName(),
                 String.join(" | ", appliedDetailLines));
-        log.info("[handleRawPayload][thing.property.post 汇总 params={}]", JsonUtils.toJsonString(properties));
 
         IotDeviceMessage message = IotDeviceMessage.requestOf(
                 IotDeviceMessageMethodEnum.PROPERTY_POST.getMethod(),
-                IotDevicePropertyPostReqDTO.of(properties));
+                IotDevicePropertyPostReqDTO.of(properties))
+                .setReportTime(reportTime);
+        log.info("[handleRawPayload][thing.property.post 最终上报 params={} deviceId={} deviceReportTime={} serverReceiveTime={}]",
+                JsonUtils.toJsonString(properties),
+                device.getId(), reportTime, serverReceiveTime);
         deviceMessageService.sendDeviceMessage(message, device.getProductKey(), device.getDeviceName(), serverId);
+    }
+
+    /**
+     * 解析设备上报时间：
+     * 1) 有效 DAY+TIM => 使用设备时间
+     * 2) 缺失/解析失败/越界 => 回退服务器时间
+     */
+    private LocalDateTime resolveReportTime(Map<String, Object> payloadMap, Long deviceId,
+                                            String areaNo, String deviceNo) {
+        LocalDateTime serverNow = LocalDateTime.now();
+        String day = Convert.toStr(payloadMap.get("DAY"), null);
+        String time = Convert.toStr(payloadMap.get("TIM"), null);
+        if (StrUtil.hasBlank(day, time)) {
+            log.warn("[resolveReportTime][报文缺少 DAY/TIM，使用服务器时间。deviceId={} AN={} DN={} DAY={} TIM={}]",
+                    deviceId, areaNo, deviceNo, day, time);
+            return serverNow;
+        }
+        try {
+            LocalDateTime deviceReportTime = LocalDateTime.parse(day + " " + time, RAW_REPORT_TIME_FORMATTER);
+            if (isInvalidReportTime(deviceReportTime, serverNow)) {
+                log.warn("[resolveReportTime][报文时间超出允许范围，使用服务器时间。deviceId={} AN={} DN={} deviceReportTime={} serverNow={}]",
+                        deviceId, areaNo, deviceNo, deviceReportTime, serverNow);
+                return serverNow;
+            }
+            return deviceReportTime;
+        } catch (Exception ex) {
+            log.warn("[resolveReportTime][解析 DAY/TIM 失败，使用服务器时间。deviceId={} AN={} DN={} DAY={} TIM={}]",
+                    deviceId, areaNo, deviceNo, day, time, ex);
+            return serverNow;
+        }
+    }
+
+    /**
+     * 防止设备时钟异常导致时序污染：限制未来漂移和历史跨度。
+     */
+    private boolean isInvalidReportTime(LocalDateTime reportTime, LocalDateTime serverNow) {
+        return reportTime.isAfter(serverNow.plusMinutes(MAX_FUTURE_SKEW_MINUTES))
+                || reportTime.isBefore(serverNow.minusDays(MAX_HISTORY_DAYS));
     }
 
     private boolean isUpstreamDirection(Integer direction) {

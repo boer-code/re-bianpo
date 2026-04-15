@@ -36,7 +36,10 @@
         `params`, `data`, `code`, `msg`
         )
         VALUES (
-        NOW,
+        <choose>
+            <when test="reportTime instanceof java.lang.Long">${reportTime}</when>
+            <otherwise>'${@cn.hutool.core.date.DateUtil@format(reportTime, "yyyy-MM-dd HH:mm:ss.SSS")}'</otherwise>
+        </choose>,
         '${id}',
         <choose>
             <when test="reportTime instanceof java.lang.Long">${reportTime}</when>

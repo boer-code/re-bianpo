@@ -117,7 +117,9 @@ public class IotDeviceMessageServiceImpl implements IotDeviceMessageService {
      */
     private void appendDeviceMessage(IotDeviceMessage message,
                                      IotDeviceRespDTO device, String serverId) {
-        message.setId(IotDeviceMessageUtils.generateMessageId()).setReportTime(LocalDateTime.now())
+        // 如果消息没有上报时间，则使用当前时间
+        LocalDateTime reportTime = message.getReportTime() != null ? message.getReportTime() : LocalDateTime.now();
+        message.setId(IotDeviceMessageUtils.generateMessageId()).setReportTime(reportTime)
                 .setDeviceId(device.getId()).setTenantId(device.getTenantId()).setServerId(serverId);
         // 特殊：如果设备没有指定 requestId，则使用 messageId
         if (StrUtil.isEmpty(message.getRequestId())) {
