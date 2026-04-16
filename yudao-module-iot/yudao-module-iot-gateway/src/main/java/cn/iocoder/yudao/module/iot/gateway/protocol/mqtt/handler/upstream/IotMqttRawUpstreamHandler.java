@@ -97,7 +97,8 @@ public class IotMqttRawUpstreamHandler {
                     .setReportTime(reportTime);
             log.info("[handleRawPayload][心跳上报 ONLINE deviceId={} AN={} DN={} deviceReportTime={} serverReceiveTime={}]",
                     device.getId(), areaNo, deviceNo, reportTime, serverReceiveTime);
-            deviceMessageService.sendDeviceMessage(heartbeatMessage, device.getProductKey(), device.getDeviceName(), serverId);
+            // RAW 设备上报 topic 固定、无连接上下文，避免 biz 侧生成 reply 后下发失败日志，serverId 置空
+            deviceMessageService.sendDeviceMessage(heartbeatMessage, device.getProductKey(), device.getDeviceName(), null);
             return;
         }
 
@@ -184,7 +185,8 @@ public class IotMqttRawUpstreamHandler {
         log.info("[handleRawPayload][thing.property.post 最终上报 params={} deviceId={} deviceReportTime={} serverReceiveTime={}]",
                 JsonUtils.toJsonString(properties),
                 device.getId(), reportTime, serverReceiveTime);
-        deviceMessageService.sendDeviceMessage(message, device.getProductKey(), device.getDeviceName(), serverId);
+        // RAW 设备上报 topic 固定、无连接上下文，避免 biz 侧生成 reply 后下发失败日志，serverId 置空
+        deviceMessageService.sendDeviceMessage(message, device.getProductKey(), device.getDeviceName(), null);
     }
 
     /**
