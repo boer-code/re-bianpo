@@ -14,6 +14,7 @@ import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.annotation.Resource;
+import jakarta.annotation.security.PermitAll;
 import jakarta.validation.Valid;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.validation.annotation.Validated;
@@ -79,11 +80,29 @@ public class IotDeviceGroupController {
 
     @GetMapping("/simple-list")
     @Operation(summary = "获取设备分组的精简信息列表", description = "只包含被开启的分组，主要用于前端的下拉选项；含各分组设备数量，供首页统计等使用")
+    @PermitAll
     public CommonResult<List<IotDeviceGroupRespVO>> getSimpleDeviceGroupList() {
         List<IotDeviceGroupDO> list = deviceGroupService.getDeviceGroupListByStatus(CommonStatusEnum.ENABLE.getStatus());
         return success(convertList(list, group -> new IotDeviceGroupRespVO()
                 .setId(group.getId())
                 .setName(group.getName())
+                .setLongitude(group.getLongitude())
+                .setLatitude(group.getLatitude())
+                .setAltitude(group.getAltitude())
+                .setDeviceCount(deviceService.getDeviceCountByGroupId(group.getId()))));
+    }
+
+    @GetMapping("/location-list")
+    @Operation(summary = "获取站点位置列表", description = "返回包含经纬度的站点列表，用于大屏地图定位")
+    @PermitAll
+    public CommonResult<List<IotDeviceGroupRespVO>> getDeviceGroupLocationList() {
+        List<IotDeviceGroupDO> list = deviceGroupService.getDeviceGroupListByStatus(CommonStatusEnum.ENABLE.getStatus());
+        return success(convertList(list, group -> new IotDeviceGroupRespVO()
+                .setId(group.getId())
+                .setName(group.getName())
+                .setLongitude(group.getLongitude())
+                .setLatitude(group.getLatitude())
+                .setAltitude(group.getAltitude())
                 .setDeviceCount(deviceService.getDeviceCountByGroupId(group.getId()))));
     }
 
