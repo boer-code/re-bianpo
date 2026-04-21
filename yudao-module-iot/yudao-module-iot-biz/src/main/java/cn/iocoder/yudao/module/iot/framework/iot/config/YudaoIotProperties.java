@@ -17,12 +17,12 @@ public class YudaoIotProperties {
     /**
      * 设备连接超时时间
      */
-    private Duration keepAliveTime = Duration.ofMinutes(10);
+    private Duration keepAliveTime = Duration.ofMinutes(1);
     /**
      * 设备连接超时时间的因子
      *
      * 因为设备可能会有网络抖动，所以需要乘以一个因子，避免误判
      */
-    private double keepAliveFactor = 1.5D;
+    private double keepAliveFactor = 1.0D;
 
 }
