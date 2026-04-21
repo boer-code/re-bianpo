@@ -8,8 +8,10 @@ import cn.iocoder.yudao.module.iot.dal.dataobject.alert.IotAlertRecordDO;
 import com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper;
 import org.apache.ibatis.annotations.Mapper;
 
+import javax.annotation.Nullable;
 import java.util.Collection;
 import java.util.List;
+import java.time.LocalDateTime;
 
 /**
  * IoT 告警记录 Mapper
@@ -41,6 +43,11 @@ public interface IotAlertRecordMapper extends BaseMapperX<IotAlertRecordDO> {
     default int updateList(Collection<Long> ids, IotAlertRecordDO updateObj) {
         return update(updateObj, new LambdaUpdateWrapper<IotAlertRecordDO>()
                 .in(IotAlertRecordDO::getId, ids));
+    }
+
+    default Long selectCountByCreateTime(@Nullable LocalDateTime createTime) {
+        return selectCount(new LambdaQueryWrapperX<IotAlertRecordDO>()
+                .geIfPresent(IotAlertRecordDO::getCreateTime, createTime));
     }
 
 }

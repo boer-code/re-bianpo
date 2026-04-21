@@ -15,6 +15,7 @@ import org.springframework.validation.annotation.Validated;
 
 import java.util.Collection;
 import java.util.List;
+import java.time.LocalDateTime;
 
 /**
  * IoT 告警记录 Service 实现类
@@ -39,6 +40,11 @@ public class IotAlertRecordServiceImpl implements IotAlertRecordService {
     @Override
     public PageResult<IotAlertRecordDO> getAlertRecordPage(IotAlertRecordPageReqVO pageReqVO) {
         return alertRecordMapper.selectPage(pageReqVO);
+    }
+
+    @Override
+    public Long getAlertRecordCount(LocalDateTime createTime) {
+        return alertRecordMapper.selectCountByCreateTime(createTime);
     }
 
     @Override

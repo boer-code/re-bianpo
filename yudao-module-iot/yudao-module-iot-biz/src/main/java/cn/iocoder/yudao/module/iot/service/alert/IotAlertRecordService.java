@@ -7,8 +7,10 @@ import cn.iocoder.yudao.module.iot.dal.dataobject.alert.IotAlertConfigDO;
 import cn.iocoder.yudao.module.iot.dal.dataobject.alert.IotAlertRecordDO;
 import jakarta.validation.constraints.NotNull;
 
+import javax.annotation.Nullable;
 import java.util.Collection;
 import java.util.List;
+import java.time.LocalDateTime;
 
 /**
  * IoT 告警记录 Service 接口
@@ -32,6 +34,14 @@ public interface IotAlertRecordService {
      * @return 告警记录分页
      */
     PageResult<IotAlertRecordDO> getAlertRecordPage(IotAlertRecordPageReqVO pageReqVO);
+
+    /**
+     * 获得告警记录数量
+     *
+     * @param createTime 创建时间，如果为空，则统计所有告警记录数量
+     * @return 告警记录数量
+     */
+    Long getAlertRecordCount(@Nullable LocalDateTime createTime);
 
     /**
      * 获得指定场景规则的告警记录列表

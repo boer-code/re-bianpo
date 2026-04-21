@@ -45,6 +45,9 @@ public class IotStatisticsSummaryRespVO {
     @Schema(description = "待激活设备数量", requiredMode = Schema.RequiredMode.REQUIRED, example = "5")
     private Long deviceInactiveCount;
 
+    @Schema(description = "告警次数", requiredMode = Schema.RequiredMode.REQUIRED, example = "12")
+    private Long alertRecordCount;
+
     @Schema(description = "按品类统计的设备数量")
     private Map<String, Integer> productCategoryDeviceCounts;
 
