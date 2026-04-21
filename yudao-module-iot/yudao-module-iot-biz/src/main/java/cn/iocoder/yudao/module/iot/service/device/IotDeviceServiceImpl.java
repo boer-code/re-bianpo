@@ -33,8 +33,10 @@ import cn.iocoder.yudao.module.iot.core.util.IotDeviceAuthUtils;
 import cn.iocoder.yudao.module.iot.core.util.IotProductAuthUtils;
 import cn.iocoder.yudao.module.iot.dal.dataobject.device.IotDeviceDO;
 import cn.iocoder.yudao.module.iot.dal.dataobject.device.IotDeviceGroupDO;
+import cn.iocoder.yudao.module.iot.dal.dataobject.device.IotDeviceOnlineRecordDO;
 import cn.iocoder.yudao.module.iot.dal.dataobject.product.IotProductDO;
 import cn.iocoder.yudao.module.iot.dal.mysql.device.IotDeviceMapper;
+import cn.iocoder.yudao.module.iot.dal.mysql.device.IotDeviceOnlineRecordMapper;
 import cn.iocoder.yudao.module.iot.dal.redis.RedisKeyConstants;
 import cn.iocoder.yudao.module.iot.enums.product.IotProductDeviceTypeEnum;
 import cn.iocoder.yudao.module.iot.service.device.message.IotDeviceMessageService;
@@ -73,6 +75,8 @@ public class IotDeviceServiceImpl implements IotDeviceService {
 
     @Resource
     private IotDeviceMapper deviceMapper;
+    @Resource
+    private IotDeviceOnlineRecordMapper deviceOnlineRecordMapper;
 
     @Resource
     @Lazy  // 延迟加载，解决循环依赖
@@ -440,28 +444,51 @@ public class IotDeviceServiceImpl implements IotDeviceService {
     }
 
     @Override
+    @Transactional(rollbackFor = Exception.class)
     public void updateDeviceState(IotDeviceDO device, Integer state) {
+        boolean stateChanged = !Objects.equals(device.getState(), state);
+        LocalDateTime now = LocalDateTime.now();
+
         // 1. 更新状态和时间
         IotDeviceDO updateObj = new IotDeviceDO().setId(device.getId()).setState(state);
         if (device.getOnlineTime() == null
                 && Objects.equals(state, IotDeviceStateEnum.ONLINE.getState())) {
-            updateObj.setActiveTime(LocalDateTime.now());
+            updateObj.setActiveTime(now);
         }
         if (Objects.equals(state, IotDeviceStateEnum.ONLINE.getState())) {
-            updateObj.setOnlineTime(LocalDateTime.now());
+            updateObj.setOnlineTime(now);
         } else if (Objects.equals(state, IotDeviceStateEnum.OFFLINE.getState())) {
-            updateObj.setOfflineTime(LocalDateTime.now());
+            updateObj.setOfflineTime(now);
         }
         deviceMapper.updateById(updateObj);
 
-        // 2. 清空对应缓存
+        // 2. 记录上下线事件，仅记录真实的在线/离线状态切换
+        if (stateChanged) {
+            createDeviceOnlineRecord(device, state);
+        }
+
+        // 3. 清空对应缓存
         deleteDeviceCache(device);
 
-        // 3. 网关设备下线时，联动所有子设备下线
+        // 4. 网关设备下线时，联动所有子设备下线
         if (Objects.equals(state, IotDeviceStateEnum.OFFLINE.getState())
                 && IotProductDeviceTypeEnum.isGateway(device.getDeviceType())) {
             handleGatewayOffline(device);
         }
+    }
+
+    private void createDeviceOnlineRecord(IotDeviceDO device, Integer state) {
+        if (!Objects.equals(state, IotDeviceStateEnum.ONLINE.getState())
+                && !Objects.equals(state, IotDeviceStateEnum.OFFLINE.getState())) {
+            return;
+        }
+        IotDeviceOnlineRecordDO record = new IotDeviceOnlineRecordDO();
+        record.setTenantId(device.getTenantId());
+        record.setProductKey(device.getProductKey());
+        record.setDeviceId(device.getId());
+        record.setDeviceName(device.getDeviceName());
+        record.setState(state);
+        deviceOnlineRecordMapper.insert(record);
     }
 
     /**
@@ -490,6 +517,7 @@ public class IotDeviceServiceImpl implements IotDeviceService {
     }
 
     @Override
+    @Transactional(rollbackFor = Exception.class)
     public void updateDeviceState(Long id, Integer state) {
         // 校验存在
         IotDeviceDO device = validateDeviceExists(id);
