@@ -53,3 +53,7 @@ application-my.yaml
 /yudao-ui-app/unpackage/
 **/.DS_Store
 .worktrees/
+/.specstory/
+/.vscode/
+/.cursor/
+/.DS_Store
