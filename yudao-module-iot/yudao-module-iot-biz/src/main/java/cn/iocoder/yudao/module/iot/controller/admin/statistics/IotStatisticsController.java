@@ -1,19 +1,25 @@
 package cn.iocoder.yudao.module.iot.controller.admin.statistics;
 
 import cn.hutool.core.collection.CollUtil;
-import cn.hutool.core.util.StrUtil;
+import cn.hutool.core.map.MapUtil;
 import cn.iocoder.yudao.framework.common.enums.CommonStatusEnum;
 import cn.iocoder.yudao.framework.common.pojo.CommonResult;
 import cn.iocoder.yudao.framework.common.util.date.LocalDateTimeUtils;
+import cn.iocoder.yudao.module.iot.controller.admin.statistics.vo.IotStatisticsAlertMessageRespVO;
+import cn.iocoder.yudao.module.iot.controller.admin.statistics.vo.IotStatisticsAlertMessagesRespVO;
 import cn.iocoder.yudao.module.iot.controller.admin.statistics.vo.IotStatisticsDeviceMessageReqVO;
 import cn.iocoder.yudao.module.iot.controller.admin.statistics.vo.IotStatisticsDeviceMessageSummaryByDateRespVO;
 import cn.iocoder.yudao.module.iot.controller.admin.statistics.vo.IotStatisticsDeviceStateRecordRespVO;
 import cn.iocoder.yudao.module.iot.controller.admin.statistics.vo.IotStatisticsDeviceStateRecordsRespVO;
+import cn.iocoder.yudao.module.iot.controller.admin.statistics.vo.IotStatisticsRankRespVO;
 import cn.iocoder.yudao.module.iot.controller.admin.statistics.vo.IotStatisticsSummaryRespVO;
 import cn.iocoder.yudao.module.iot.core.enums.device.IotDeviceStateEnum;
+import cn.iocoder.yudao.module.iot.core.mq.message.IotDeviceMessage;
+import cn.iocoder.yudao.module.iot.dal.dataobject.alert.IotAlertRecordDO;
 import cn.iocoder.yudao.module.iot.dal.dataobject.device.IotDeviceDO;
 import cn.iocoder.yudao.module.iot.dal.dataobject.device.IotDeviceGroupDO;
 import cn.iocoder.yudao.module.iot.dal.dataobject.device.IotDeviceOnlineRecordDO;
+import cn.iocoder.yudao.module.iot.dal.mysql.alert.IotAlertRecordMapper;
 import cn.iocoder.yudao.module.iot.dal.mysql.device.IotDeviceMapper;
 import cn.iocoder.yudao.module.iot.dal.mysql.device.IotDeviceOnlineRecordMapper;
 import cn.iocoder.yudao.module.iot.service.alert.IotAlertRecordService;
@@ -35,11 +41,15 @@ import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 import java.time.LocalDateTime;
+import java.util.ArrayList;
 import java.util.Collections;
+import java.util.Comparator;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
+import java.util.stream.Collectors;
 
 import static cn.iocoder.yudao.framework.common.pojo.CommonResult.success;
 import static cn.iocoder.yudao.framework.common.util.collection.CollectionUtils.convertList;
@@ -54,6 +64,10 @@ public class IotStatisticsController {
 
     private static final int DEFAULT_DEVICE_STATE_RECORD_LIMIT = 20;
     private static final int MAX_DEVICE_STATE_RECORD_LIMIT = 100;
+    private static final int DEFAULT_ALERT_RANKING_LIMIT = 8;
+    private static final int MAX_ALERT_RANKING_LIMIT = 50;
+    private static final int DEFAULT_ALERT_MESSAGE_LIMIT = 20;
+    private static final int MAX_ALERT_MESSAGE_LIMIT = 100;
 
     @Resource
     private IotDeviceService deviceService;
@@ -63,6 +77,8 @@ public class IotStatisticsController {
     private IotDeviceGroupService deviceGroupService;
     @Resource
     private IotDeviceOnlineRecordMapper deviceOnlineRecordMapper;
+    @Resource
+    private IotAlertRecordMapper alertRecordMapper;
     @Resource
     private IotProductCategoryService productCategoryService;
     @Resource
@@ -103,9 +119,84 @@ public class IotStatisticsController {
 
     @GetMapping("/get-device-message-summary-by-date")
     @Operation(summary = "获取设备消息的数据统计")
+    @PermitAll
     public CommonResult<List<IotStatisticsDeviceMessageSummaryByDateRespVO>> getDeviceMessageSummaryByDate(
             @Valid IotStatisticsDeviceMessageReqVO reqVO) {
         return success(deviceMessageService.getDeviceMessageSummaryByDate(reqVO));
+    }
+
+    @GetMapping("/alert-ranking-by-device-group")
+    @Operation(summary = "获取站点告警排名", description = "匿名接口，按设备所属站点聚合告警次数并返回 Top 排名")
+    @Parameter(name = "limitNum", description = "返回条数，默认 8，最大 50", example = "8")
+    @PermitAll
+    public CommonResult<List<IotStatisticsRankRespVO>> getAlertRankingByDeviceGroup(
+            @RequestParam(value = "limitNum", required = false) Integer limitNum) {
+        Integer limit = normalizeAlertRankingLimit(limitNum);
+        List<Map<String, Object>> deviceAlertCounts = alertRecordMapper.selectAlertCountGroupByDeviceId();
+        if (CollUtil.isEmpty(deviceAlertCounts)) {
+            return success(Collections.emptyList());
+        }
+
+        Set<Long> deviceIds = convertSet(deviceAlertCounts, row -> MapUtil.getLong(row, "deviceId"));
+        Map<Long, IotDeviceDO> deviceMap = convertMap(deviceMapper.selectBatchIds(deviceIds), IotDeviceDO::getId);
+        Map<Long, IotDeviceGroupDO> groupMap = convertMap(
+                deviceGroupService.getDeviceGroupListByStatus(CommonStatusEnum.ENABLE.getStatus()),
+                IotDeviceGroupDO::getId);
+
+        Map<Long, Long> groupAlertCountMap = new HashMap<>();
+        for (Map<String, Object> row : deviceAlertCounts) {
+            Long deviceId = MapUtil.getLong(row, "deviceId");
+            Long alertCount = MapUtil.getLong(row, "alertCount", 0L);
+            IotDeviceDO device = deviceMap.get(deviceId);
+            if (device == null || CollUtil.isEmpty(device.getGroupIds())) {
+                continue;
+            }
+            for (Long groupId : device.getGroupIds()) {
+                if (groupMap.containsKey(groupId)) {
+                    groupAlertCountMap.merge(groupId, alertCount, Long::sum);
+                }
+            }
+        }
+
+        List<IotStatisticsRankRespVO> result = new ArrayList<>();
+        groupAlertCountMap.entrySet().stream()
+                .sorted(Map.Entry.<Long, Long>comparingByValue(Comparator.reverseOrder()))
+                .limit(limit)
+                .forEach(entry -> {
+                    IotDeviceGroupDO group = groupMap.get(entry.getKey());
+                    result.add(new IotStatisticsRankRespVO()
+                            .setName(group.getName())
+                            .setValue(entry.getValue()));
+                });
+        return success(result);
+    }
+
+    @GetMapping("/alert-messages")
+    @Operation(summary = "获取大屏告警消息列表", description = "匿名接口，返回最近告警消息及设备、站点信息")
+    @Parameter(name = "limitNum", description = "返回条数，默认 20，最大 100", example = "20")
+    @PermitAll
+    public CommonResult<IotStatisticsAlertMessagesRespVO> getAlertMessages(
+            @RequestParam(value = "limitNum", required = false) Integer limitNum) {
+        Integer limit = normalizeAlertMessageLimit(limitNum);
+        List<IotAlertRecordDO> records = alertRecordMapper.selectRecentList(limit);
+
+        IotStatisticsAlertMessagesRespVO respVO = new IotStatisticsAlertMessagesRespVO();
+        if (CollUtil.isEmpty(records)) {
+            respVO.setList(Collections.emptyList());
+            return success(respVO);
+        }
+
+        Set<Long> deviceIds = records.stream()
+                .map(IotAlertRecordDO::getDeviceId)
+                .filter(Objects::nonNull)
+                .collect(Collectors.toSet());
+        Map<Long, IotDeviceDO> deviceMap = convertMap(deviceMapper.selectBatchIds(deviceIds), IotDeviceDO::getId);
+        Map<Long, IotDeviceGroupDO> groupMap = convertMap(
+                deviceGroupService.getDeviceGroupListByStatus(CommonStatusEnum.ENABLE.getStatus()),
+                IotDeviceGroupDO::getId);
+        respVO.setList(convertList(records, record -> buildAlertMessageRespVO(
+                record, deviceMap.get(record.getDeviceId()), groupMap)));
+        return success(respVO);
     }
 
     @GetMapping("/device-state-records")
@@ -141,6 +232,59 @@ public class IotStatisticsController {
         return Math.min(Math.max(limitNum, 1), MAX_DEVICE_STATE_RECORD_LIMIT);
     }
 
+    private Integer normalizeAlertRankingLimit(Integer limitNum) {
+        if (limitNum == null) {
+            return DEFAULT_ALERT_RANKING_LIMIT;
+        }
+        return Math.min(Math.max(limitNum, 1), MAX_ALERT_RANKING_LIMIT);
+    }
+
+    private Integer normalizeAlertMessageLimit(Integer limitNum) {
+        if (limitNum == null) {
+            return DEFAULT_ALERT_MESSAGE_LIMIT;
+        }
+        return Math.min(Math.max(limitNum, 1), MAX_ALERT_MESSAGE_LIMIT);
+    }
+
+    private IotStatisticsAlertMessageRespVO buildAlertMessageRespVO(IotAlertRecordDO record, IotDeviceDO device,
+                                                                    Map<Long, IotDeviceGroupDO> groupMap) {
+        IotDeviceGroupDO site = findFirstSite(device, groupMap);
+        IotStatisticsAlertMessageRespVO respVO = new IotStatisticsAlertMessageRespVO();
+        respVO.setId(record.getId());
+        respVO.setAlertName(record.getConfigName());
+        respVO.setAlertDetail(record.getConfigName());
+        respVO.setAlertLevel(record.getConfigLevel());
+        respVO.setAlertValue(getAlertValue(record.getDeviceMessage()));
+        respVO.setProcessStatus(record.getProcessStatus());
+        respVO.setDeviceId(record.getDeviceId());
+        respVO.setCreateTime(record.getCreateTime());
+
+        if (device != null) {
+            respVO.setDeviceName(device.getDeviceName());
+            respVO.setNickname(device.getNickname());
+        }
+        if (site != null) {
+            respVO.setSiteName(site.getName());
+            respVO.setAddress(site.getName());
+        }
+        return respVO;
+    }
+
+    private Object getAlertValue(IotDeviceMessage deviceMessage) {
+        if (deviceMessage == null || !(deviceMessage.getParams() instanceof Map<?, ?> params)) {
+            return null;
+        }
+        Object value = params.get("value");
+        if (value != null) {
+            return value;
+        }
+        value = params.get("alertValue");
+        if (value != null) {
+            return value;
+        }
+        return params.get("val");
+    }
+
     private IotStatisticsDeviceStateRecordRespVO buildDeviceStateRecordRespVO(IotDeviceOnlineRecordDO record,
                                                                               IotDeviceDO device,
                                                                               Map<Long, IotDeviceGroupDO> groupMap) {
@@ -150,7 +294,6 @@ public class IotStatisticsController {
         respVO.setDeviceId(record.getDeviceId());
         respVO.setProductKey(record.getProductKey());
         respVO.setDeviceName(record.getDeviceName());
-        respVO.setGatewayno(record.getDeviceName());
         respVO.setState(record.getState());
         respVO.setOnlineState(Objects.equals(record.getState(), IotDeviceStateEnum.ONLINE.getState()) ? 1 : 0);
         respVO.setCreateTime(record.getCreateTime());
@@ -158,14 +301,11 @@ public class IotStatisticsController {
         if (device != null) {
             respVO.setDeviceName(device.getDeviceName());
             respVO.setNickname(device.getNickname());
-            respVO.setSerialNumber(device.getSerialNumber());
-            respVO.setGatewayno(StrUtil.blankToDefault(device.getSerialNumber(), device.getDeviceName()));
             respVO.setLongitude(device.getLongitude());
             respVO.setLatitude(device.getLatitude());
             respVO.setAltitude(device.getAltitude());
         }
         if (site != null) {
-            respVO.setSiteId(site.getId());
             respVO.setSiteName(site.getName());
             setSiteAddressFields(respVO, site);
         }

@@ -22,12 +22,6 @@ public class IotStatisticsDeviceStateRecordRespVO {
     @Schema(description = "设备备注名称", example = "1号温度传感器")
     private String nickname;
 
-    @Schema(description = "设备序列号", example = "SN001")
-    private String serialNumber;
-
-    @Schema(description = "大屏兼容字段：设备标识", example = "SN001")
-    private String gatewayno;
-
     @Schema(description = "产品标识", example = "pk001")
     private String productKey;
 
@@ -40,23 +34,11 @@ public class IotStatisticsDeviceStateRecordRespVO {
     @Schema(description = "状态记录时间", requiredMode = Schema.RequiredMode.REQUIRED)
     private LocalDateTime createTime;
 
-    @Schema(description = "站点编号", example = "1")
-    private Long siteId;
-
     @Schema(description = "站点名称", example = "站点A")
     private String siteName;
 
     @Schema(description = "站点地址", example = "福建省/南平市/武夷山市")
     private String address;
-
-    @Schema(description = "大屏兼容字段：省份", example = "福建省")
-    private String provinceName;
-
-    @Schema(description = "大屏兼容字段：城市", example = "南平市")
-    private String cityName;
-
-    @Schema(description = "大屏兼容字段：区县", example = "武夷山市")
-    private String countyName;
 
     @Schema(description = "设备经度", example = "116.397428")
     private BigDecimal longitude;
