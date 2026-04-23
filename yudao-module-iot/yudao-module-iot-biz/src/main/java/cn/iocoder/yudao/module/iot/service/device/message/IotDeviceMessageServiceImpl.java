@@ -6,7 +6,6 @@ import cn.hutool.core.date.LocalDateTimeUtil;
 import cn.hutool.core.lang.Assert;
 import cn.hutool.core.map.MapUtil;
 import cn.hutool.core.util.StrUtil;
-import cn.hutool.extra.spring.SpringUtil;
 import cn.iocoder.yudao.framework.common.exception.ServiceException;
 import cn.iocoder.yudao.framework.common.pojo.PageResult;
 import cn.iocoder.yudao.framework.common.util.date.LocalDateTimeUtils;
@@ -71,6 +70,9 @@ public class IotDeviceMessageServiceImpl implements IotDeviceMessageService {
 
     @Resource
     private IotDeviceMessageProducer deviceMessageProducer;
+    @Resource
+    @Lazy
+    private IotDeviceMessageService self;
 
     @Override
     public void defineDeviceMessageStable() {
@@ -83,8 +85,9 @@ public class IotDeviceMessageServiceImpl implements IotDeviceMessageService {
         log.info("[defineDeviceMessageStable][设备消息超级表不存在，创建成功]");
     }
 
+    @Override
     @Async
-    void createDeviceLogAsync(IotDeviceMessage message) {
+    public void createDeviceLogAsync(IotDeviceMessage message) {
         IotDeviceMessageDO messageDO = BeanUtils.toBean(message, IotDeviceMessageDO.class)
                 .setUpstream(IotDeviceMessageUtils.isUpstreamMessage(message))
                 .setReply(IotDeviceMessageUtils.isReplyMessage(message))
@@ -136,7 +139,7 @@ public class IotDeviceMessageServiceImpl implements IotDeviceMessageService {
         }
         deviceMessageProducer.sendDeviceMessageToGateway(serverId, message);
         // 特殊：记录消息日志。原因：上行消息，消费时，已经会记录；下行消息，因为消费在 Gateway 端，所以需要在这里记录
-        getSelf().createDeviceLogAsync(message);
+        self.createDeviceLogAsync(message);
         return message;
     }
 
@@ -171,7 +174,7 @@ public class IotDeviceMessageServiceImpl implements IotDeviceMessageService {
         }
 
         // 2. 记录消息
-        getSelf().createDeviceLogAsync(message);
+        self.createDeviceLogAsync(message);
 
         // 3. 回复消息。前提：非 _reply 消息、非禁用回复的消息
         if (IotDeviceMessageUtils.isReplyMessage(message)
@@ -371,10 +374,6 @@ public class IotDeviceMessageServiceImpl implements IotDeviceMessageService {
                     .setTime(LocalDateTimeUtils.formatDateRange(times[0], times[1], reqVO.getInterval()))
                     .setUpstreamCount(upstreamCount).setDownstreamCount(downstreamCount);
         });
-    }
-
-    private IotDeviceMessageServiceImpl getSelf() {
-        return SpringUtil.getBean(getClass());
     }
 
 }

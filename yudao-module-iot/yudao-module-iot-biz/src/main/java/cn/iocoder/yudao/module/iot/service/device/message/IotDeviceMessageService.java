@@ -57,6 +57,13 @@ public interface IotDeviceMessageService {
     void handleUpstreamDeviceMessage(IotDeviceMessage message, IotDeviceDO device);
 
     /**
+     * 异步记录设备消息日志
+     *
+     * @param message 消息
+     */
+    void createDeviceLogAsync(IotDeviceMessage message);
+
+    /**
      * 获得设备消息分页
      *
      * @param pageReqVO 分页查询
