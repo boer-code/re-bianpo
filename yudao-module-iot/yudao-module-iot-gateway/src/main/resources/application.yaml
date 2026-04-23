@@ -120,10 +120,10 @@ yudao:
           mqtt:
             max-message-size: 8192           # 最大消息大小（字节）
             connect-timeout-seconds: 60      # 连接超时时间（秒）
-            adminClientId: admin                 # 管理员设备ID
-            adminUsername: admin                 # 管理员用户名
-            adminPassword: admin                 # 管理员密码
-            raw-topic-up: /device/raw/up         # 统一原始上报主题
+            rawClientId: admin123                 # raw设备ID
+            rawUsername: admin123                 # raw用户名
+            rawPassword: admin123                 # raw密码
+            raw-topic-up: /iot/boer/up         # 统一原始上报主题
             raw-register-product-key: raw_product # 原始上报自动注册产品标识
         # ====================================
         # 针对引入的 EMQX 组件的配置
