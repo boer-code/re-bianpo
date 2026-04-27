@@ -52,6 +52,11 @@ public interface IotAlertRecordMapper extends BaseMapperX<IotAlertRecordDO> {
                 .geIfPresent(IotAlertRecordDO::getCreateTime, createTime));
     }
 
+    default Long selectCountByCreateTimeRange(@Nullable LocalDateTime startTime, @Nullable LocalDateTime endTime) {
+        return selectCount(new LambdaQueryWrapperX<IotAlertRecordDO>()
+                .betweenIfPresent(IotAlertRecordDO::getCreateTime, startTime, endTime));
+    }
+
     default List<Map<String, Object>> selectAlertCountGroupByDeviceId() {
         return selectMaps(new QueryWrapper<IotAlertRecordDO>()
                 .select("device_id AS deviceId", "COUNT(1) AS alertCount")
@@ -59,8 +64,10 @@ public interface IotAlertRecordMapper extends BaseMapperX<IotAlertRecordDO> {
                 .groupBy("device_id"));
     }
 
-    default List<IotAlertRecordDO> selectRecentList(Integer limit) {
+    default List<IotAlertRecordDO> selectRecentList(Integer limit, @Nullable LocalDateTime startTime,
+                                                    @Nullable LocalDateTime endTime) {
         return selectList(new LambdaQueryWrapperX<IotAlertRecordDO>()
+                .betweenIfPresent(IotAlertRecordDO::getCreateTime, startTime, endTime)
                 .orderByDesc(IotAlertRecordDO::getCreateTime)
                 .last("LIMIT " + limit));
     }

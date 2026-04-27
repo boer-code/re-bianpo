@@ -9,7 +9,13 @@ import java.util.List;
 @Data
 public class IotStatisticsDeviceStateRecordsRespVO {
 
-    @Schema(description = "设备上下线状态记录")
+    @Schema(description = "符合时间范围的上线事件总数", example = "16")
+    private Long totalOnline;
+
+    @Schema(description = "符合时间范围的离线事件总数", example = "17")
+    private Long totalOffline;
+
+    @Schema(description = "设备上下线状态明细列表（按时间倒序，受 limitNum 限制）")
     private List<IotStatisticsDeviceStateRecordRespVO> list;
 
 }

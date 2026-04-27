@@ -9,3 +9,15 @@ GET {{baseUrl}}/iot/statistics/get-device-message-summary-by-date?interval=1&tim
 Content-Type: application/json
 tenant-id: {{adminTenantId}}
 Authorization: Bearer {{token}}
+
+### 请求 /iot/statistics/alert-messages 接口（近30天时间线告警明细 + 总数）
+GET {{baseUrl}}/iot/statistics/alert-messages?limitNum=10&startTime=2026-03-29 00:00:00&endTime=2026-04-27 23:59:59
+Content-Type: application/json
+tenant-id: {{adminTenantId}}
+Authorization: Bearer {{token}}
+
+### 请求 /iot/statistics/device-state-records 接口（近30天时间线上下线明细 + 总数）
+GET {{baseUrl}}/iot/statistics/device-state-records?limitNum=5&startTime=2026-03-29 00:00:00&endTime=2026-04-27 23:59:59
+Content-Type: application/json
+tenant-id: {{adminTenantId}}
+Authorization: Bearer {{token}}

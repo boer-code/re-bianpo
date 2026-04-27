@@ -14,7 +14,6 @@ import cn.iocoder.yudao.module.iot.controller.admin.statistics.vo.IotStatisticsD
 import cn.iocoder.yudao.module.iot.controller.admin.statistics.vo.IotStatisticsRankRespVO;
 import cn.iocoder.yudao.module.iot.controller.admin.statistics.vo.IotStatisticsSummaryRespVO;
 import cn.iocoder.yudao.module.iot.core.enums.device.IotDeviceStateEnum;
-import cn.iocoder.yudao.module.iot.core.mq.message.IotDeviceMessage;
 import cn.iocoder.yudao.module.iot.dal.dataobject.alert.IotAlertRecordDO;
 import cn.iocoder.yudao.module.iot.dal.dataobject.device.IotDeviceDO;
 import cn.iocoder.yudao.module.iot.dal.dataobject.device.IotDeviceGroupDO;
@@ -35,6 +34,7 @@ import jakarta.annotation.Resource;
 import jakarta.annotation.security.PermitAll;
 import jakarta.validation.Valid;
 import org.springframework.validation.annotation.Validated;
+import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
@@ -172,15 +172,24 @@ public class IotStatisticsController {
     }
 
     @GetMapping("/alert-messages")
-    @Operation(summary = "获取大屏告警消息列表", description = "匿名接口，返回最近告警消息及设备、站点信息")
-    @Parameter(name = "limitNum", description = "返回条数，默认 20，最大 100", example = "20")
+    @Operation(summary = "获取大屏告警消息列表",
+            description = "匿名接口，支持按时间范围筛选并返回告警总数；list 为按时间倒序截取的明细列表，适合大屏时间线展示")
+    @Parameter(name = "limitNum", description = "返回明细条数，默认 20，最大 100；不影响 total 统计总数", example = "10")
+    @Parameter(name = "startTime", description = "筛选开始时间，格式 yyyy-MM-dd HH:mm:ss", example = "2026-03-29 00:00:00")
+    @Parameter(name = "endTime", description = "筛选结束时间，格式 yyyy-MM-dd HH:mm:ss", example = "2026-04-27 23:59:59")
     @PermitAll
     public CommonResult<IotStatisticsAlertMessagesRespVO> getAlertMessages(
-            @RequestParam(value = "limitNum", required = false) Integer limitNum) {
+            @RequestParam(value = "limitNum", required = false) Integer limitNum,
+            @RequestParam(value = "startTime", required = false)
+            @DateTimeFormat(pattern = "yyyy-MM-dd HH:mm:ss") LocalDateTime startTime,
+            @RequestParam(value = "endTime", required = false)
+            @DateTimeFormat(pattern = "yyyy-MM-dd HH:mm:ss") LocalDateTime endTime) {
         Integer limit = normalizeAlertMessageLimit(limitNum);
-        List<IotAlertRecordDO> records = alertRecordMapper.selectRecentList(limit);
+        LocalDateTime[] timeRange = normalizeTimeRange(startTime, endTime);
+        List<IotAlertRecordDO> records = alertRecordMapper.selectRecentList(limit, timeRange[0], timeRange[1]);
 
         IotStatisticsAlertMessagesRespVO respVO = new IotStatisticsAlertMessagesRespVO();
+        respVO.setTotal(alertRecordMapper.selectCountByCreateTimeRange(timeRange[0], timeRange[1]));
         if (CollUtil.isEmpty(records)) {
             respVO.setList(Collections.emptyList());
             return success(respVO);
@@ -200,15 +209,27 @@ public class IotStatisticsController {
     }
 
     @GetMapping("/device-state-records")
-    @Operation(summary = "获取大屏设备上下线状态记录", description = "匿名接口，返回最近设备上下线记录及设备所属站点、位置等大屏展示字段")
-    @Parameter(name = "limitNum", description = "返回条数，默认 20，最大 100", example = "20")
+    @Operation(summary = "获取大屏设备上下线状态记录",
+            description = "匿名接口，支持按时间范围筛选并返回上线总数、离线总数；list 为按时间倒序截取的明细列表，适合大屏时间线展示")
+    @Parameter(name = "limitNum", description = "返回明细条数，默认 20，最大 100；不影响 totalOnline/totalOffline 统计总数", example = "5")
+    @Parameter(name = "startTime", description = "筛选开始时间，格式 yyyy-MM-dd HH:mm:ss", example = "2026-03-29 00:00:00")
+    @Parameter(name = "endTime", description = "筛选结束时间，格式 yyyy-MM-dd HH:mm:ss", example = "2026-04-27 23:59:59")
     @PermitAll
     public CommonResult<IotStatisticsDeviceStateRecordsRespVO> getDeviceStateRecords(
-            @RequestParam(value = "limitNum", required = false) Integer limitNum) {
+            @RequestParam(value = "limitNum", required = false) Integer limitNum,
+            @RequestParam(value = "startTime", required = false)
+            @DateTimeFormat(pattern = "yyyy-MM-dd HH:mm:ss") LocalDateTime startTime,
+            @RequestParam(value = "endTime", required = false)
+            @DateTimeFormat(pattern = "yyyy-MM-dd HH:mm:ss") LocalDateTime endTime) {
         Integer limit = normalizeDeviceStateRecordLimit(limitNum);
-        List<IotDeviceOnlineRecordDO> records = deviceOnlineRecordMapper.selectRecentList(limit);
+        LocalDateTime[] timeRange = normalizeTimeRange(startTime, endTime);
+        List<IotDeviceOnlineRecordDO> records = deviceOnlineRecordMapper.selectRecentList(limit, timeRange[0], timeRange[1]);
 
         IotStatisticsDeviceStateRecordsRespVO respVO = new IotStatisticsDeviceStateRecordsRespVO();
+        respVO.setTotalOnline(deviceOnlineRecordMapper.selectCountByStateAndCreateTimeRange(
+                IotDeviceStateEnum.ONLINE.getState(), timeRange[0], timeRange[1]));
+        respVO.setTotalOffline(deviceOnlineRecordMapper.selectCountByStateAndCreateTimeRange(
+                IotDeviceStateEnum.OFFLINE.getState(), timeRange[0], timeRange[1]));
         if (CollUtil.isEmpty(records)) {
             respVO.setList(Collections.emptyList());
             return success(respVO);
@@ -246,17 +267,19 @@ public class IotStatisticsController {
         return Math.min(Math.max(limitNum, 1), MAX_ALERT_MESSAGE_LIMIT);
     }
 
+    private LocalDateTime[] normalizeTimeRange(LocalDateTime startTime, LocalDateTime endTime) {
+        if (startTime != null && endTime != null && startTime.isAfter(endTime)) {
+            return new LocalDateTime[]{endTime, startTime};
+        }
+        return new LocalDateTime[]{startTime, endTime};
+    }
+
     private IotStatisticsAlertMessageRespVO buildAlertMessageRespVO(IotAlertRecordDO record, IotDeviceDO device,
                                                                     Map<Long, IotDeviceGroupDO> groupMap) {
         IotDeviceGroupDO site = findFirstSite(device, groupMap);
         IotStatisticsAlertMessageRespVO respVO = new IotStatisticsAlertMessageRespVO();
-        respVO.setId(record.getId());
         respVO.setAlertName(record.getConfigName());
-        respVO.setAlertDetail(record.getConfigName());
         respVO.setAlertLevel(record.getConfigLevel());
-        respVO.setAlertValue(getAlertValue(record.getDeviceMessage()));
-        respVO.setProcessStatus(record.getProcessStatus());
-        respVO.setDeviceId(record.getDeviceId());
         respVO.setCreateTime(record.getCreateTime());
 
         if (device != null) {
@@ -265,24 +288,8 @@ public class IotStatisticsController {
         }
         if (site != null) {
             respVO.setSiteName(site.getName());
-            respVO.setAddress(site.getName());
         }
         return respVO;
-    }
-
-    private Object getAlertValue(IotDeviceMessage deviceMessage) {
-        if (deviceMessage == null || !(deviceMessage.getParams() instanceof Map<?, ?> params)) {
-            return null;
-        }
-        Object value = params.get("value");
-        if (value != null) {
-            return value;
-        }
-        value = params.get("alertValue");
-        if (value != null) {
-            return value;
-        }
-        return params.get("val");
     }
 
     private IotStatisticsDeviceStateRecordRespVO buildDeviceStateRecordRespVO(IotDeviceOnlineRecordDO record,
@@ -290,24 +297,16 @@ public class IotStatisticsController {
                                                                               Map<Long, IotDeviceGroupDO> groupMap) {
         IotDeviceGroupDO site = findFirstSite(device, groupMap);
         IotStatisticsDeviceStateRecordRespVO respVO = new IotStatisticsDeviceStateRecordRespVO();
-        respVO.setId(record.getId());
-        respVO.setDeviceId(record.getDeviceId());
-        respVO.setProductKey(record.getProductKey());
         respVO.setDeviceName(record.getDeviceName());
-        respVO.setState(record.getState());
         respVO.setOnlineState(Objects.equals(record.getState(), IotDeviceStateEnum.ONLINE.getState()) ? 1 : 0);
         respVO.setCreateTime(record.getCreateTime());
 
         if (device != null) {
             respVO.setDeviceName(device.getDeviceName());
             respVO.setNickname(device.getNickname());
-            respVO.setLongitude(device.getLongitude());
-            respVO.setLatitude(device.getLatitude());
-            respVO.setAltitude(device.getAltitude());
         }
         if (site != null) {
             respVO.setSiteName(site.getName());
-            setSiteAddressFields(respVO, site);
         }
         return respVO;
     }
@@ -321,10 +320,6 @@ public class IotStatisticsController {
                 .filter(Objects::nonNull)
                 .findFirst()
                 .orElse(null);
-    }
-
-    private void setSiteAddressFields(IotStatisticsDeviceStateRecordRespVO respVO, IotDeviceGroupDO site) {
-        respVO.setAddress(site.getName());
     }
 
 }
