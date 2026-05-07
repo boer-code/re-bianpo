@@ -5,12 +5,12 @@ import cn.iocoder.yudao.module.iot.controller.admin.alert.vo.recrod.IotAlertReco
 import cn.iocoder.yudao.module.iot.core.mq.message.IotDeviceMessage;
 import cn.iocoder.yudao.module.iot.dal.dataobject.alert.IotAlertConfigDO;
 import cn.iocoder.yudao.module.iot.dal.dataobject.alert.IotAlertRecordDO;
+import cn.iocoder.yudao.module.iot.dal.dataobject.device.IotDeviceDO;
+import jakarta.annotation.Nullable;
 import jakarta.validation.constraints.NotNull;
 
-import javax.annotation.Nullable;
 import java.util.Collection;
 import java.util.List;
-import java.time.LocalDateTime;
 
 /**
  * IoT 告警记录 Service 接口
@@ -34,14 +34,6 @@ public interface IotAlertRecordService {
      * @return 告警记录分页
      */
     PageResult<IotAlertRecordDO> getAlertRecordPage(IotAlertRecordPageReqVO pageReqVO);
-
-    /**
-     * 获得告警记录数量
-     *
-     * @param createTime 创建时间，如果为空，则统计所有告警记录数量
-     * @return 告警记录数量
-     */
-    Long getAlertRecordCount(@Nullable LocalDateTime createTime);
 
     /**
      * 获得指定场景规则的告警记录列表
@@ -68,8 +60,11 @@ public interface IotAlertRecordService {
      * @param config 告警配置
      * @param sceneRuleId 场景规则编号
      * @param deviceMessage 设备消息，可为空
+     * @param device 设备信息，可为空；用于回填产品编号、设备编号
      * @return 告警记录编号
      */
-    Long createAlertRecord(IotAlertConfigDO config, Long sceneRuleId, IotDeviceMessage deviceMessage);
+    @SuppressWarnings("UnusedReturnValue")
+    Long createAlertRecord(IotAlertConfigDO config, Long sceneRuleId,
+                           @Nullable IotDeviceMessage deviceMessage, @Nullable IotDeviceDO device);
 
 }

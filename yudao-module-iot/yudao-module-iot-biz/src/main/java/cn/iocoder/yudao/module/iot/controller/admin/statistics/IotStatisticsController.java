@@ -21,7 +21,6 @@ import cn.iocoder.yudao.module.iot.dal.dataobject.device.IotDeviceOnlineRecordDO
 import cn.iocoder.yudao.module.iot.dal.mysql.alert.IotAlertRecordMapper;
 import cn.iocoder.yudao.module.iot.dal.mysql.device.IotDeviceMapper;
 import cn.iocoder.yudao.module.iot.dal.mysql.device.IotDeviceOnlineRecordMapper;
-import cn.iocoder.yudao.module.iot.service.alert.IotAlertRecordService;
 import cn.iocoder.yudao.module.iot.service.device.IotDeviceGroupService;
 import cn.iocoder.yudao.module.iot.service.device.IotDeviceService;
 import cn.iocoder.yudao.module.iot.service.device.message.IotDeviceMessageService;
@@ -85,8 +84,6 @@ public class IotStatisticsController {
     private IotProductService productService;
     @Resource
     private IotDeviceMessageService deviceMessageService;
-    @Resource
-    private IotAlertRecordService alertRecordService;
 
     @GetMapping("/get-summary")
     @Operation(summary = "获取全局的数据统计")
@@ -113,7 +110,7 @@ public class IotStatisticsController {
         respVO.setDeviceOnlineCount(deviceCountMap.getOrDefault(IotDeviceStateEnum.ONLINE.getState(), 0L));
         respVO.setDeviceOfflineCount(deviceCountMap.getOrDefault(IotDeviceStateEnum.OFFLINE.getState(), 0L));
         respVO.setDeviceInactiveCount(deviceCountMap.getOrDefault(IotDeviceStateEnum.INACTIVE.getState(), 0L));
-        respVO.setAlertRecordCount(alertRecordService.getAlertRecordCount(null));
+        respVO.setAlertRecordCount(alertRecordMapper.selectCountByCreateTime(null));
         return success(respVO);
     }
 
