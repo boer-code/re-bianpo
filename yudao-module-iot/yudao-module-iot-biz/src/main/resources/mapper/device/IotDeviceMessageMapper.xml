@@ -65,6 +65,9 @@
         `params`, `data`, `code`, `msg`
         FROM `boer`.`device_message_${reqVO.deviceId}`
         <where>
+            <if test="tenantId != null">
+                AND `tenant_id` = ${tenantId}
+            </if>
             <if test="reqVO.method != null and reqVO.method != ''">
                 AND `method` = '${reqVO.method}'
             </if>
@@ -87,6 +90,9 @@
         `params`, `data`, `code`, `msg`
         FROM `boer`.`device_message_${deviceId}`
         WHERE `reply` = ${reply}
+        <if test="tenantId != null">
+            AND `tenant_id` = ${tenantId}
+        </if>
         AND `request_id` IN
         <foreach collection="requestIds" item="requestId" open="(" close=")" separator=",">
             '${requestId}'
@@ -98,6 +104,9 @@
         SELECT COUNT(*)
         FROM `boer`.`device_message`
         <where>
+            <if test="tenantId != null">
+                AND `tenant_id` = ${tenantId}
+            </if>
             <if test="createTime != null">
                 AND `ts` >= ${createTime}
             </if>
@@ -111,6 +120,9 @@
         SUM(CASE WHEN `upstream` = false THEN 1 ELSE 0 END) AS `downstream_count`
         FROM `boer`.`device_message`
         <where>
+            <if test="tenantId != null">
+                AND `tenant_id` = ${tenantId}
+            </if>
             <if test="startTime != null">
                 AND `ts` >= ${startTime}
             </if>

@@ -48,15 +48,18 @@ public interface IotDeviceMessageMapper {
      * @return 设备消息列表
      */
     IPage<IotDeviceMessageDO> selectPage(IPage<IotDeviceMessageDO> page,
-                                         @Param("reqVO") IotDeviceMessagePageReqVO reqVO);
+                                         @Param("reqVO") IotDeviceMessagePageReqVO reqVO,
+                                         @Param("tenantId") Long tenantId);
 
     /**
      * 统计设备消息数量
      *
      * @param createTime 创建时间，如果为空，则统计所有消息数量
+     * @param tenantId 租户编号
      * @return 消息数量
      */
-    Long selectCountByCreateTime(@Param("createTime") Long createTime);
+    Long selectCountByCreateTime(@Param("createTime") Long createTime,
+                                 @Param("tenantId") Long tenantId);
 
     /**
      * 按照 requestIds 批量查询消息
@@ -64,16 +67,19 @@ public interface IotDeviceMessageMapper {
      * @param deviceId 设备编号
      * @param requestIds 请求编号集合
      * @param reply 是否回复消息
+     * @param tenantId 租户编号
      * @return 消息列表
      */
     List<IotDeviceMessageDO> selectListByRequestIdsAndReply(@Param("deviceId") Long deviceId,
                                                             @Param("requestIds") Collection<String> requestIds,
-                                                            @Param("reply") Boolean reply);
+                                                            @Param("reply") Boolean reply,
+                                                            @Param("tenantId") Long tenantId);
 
     /**
      * 按照时间范围（小时），统计设备的消息数量
      */
     List<Map<String, Object>> selectDeviceMessageCountGroupByDate(@Param("startTime") Long startTime,
-                                                                  @Param("endTime") Long endTime);
+                                                                  @Param("endTime") Long endTime,
+                                                                  @Param("tenantId") Long tenantId);
 
 }

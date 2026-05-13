@@ -11,6 +11,7 @@ import cn.iocoder.yudao.framework.common.pojo.PageResult;
 import cn.iocoder.yudao.framework.common.util.date.LocalDateTimeUtils;
 import cn.iocoder.yudao.framework.common.util.json.JsonUtils;
 import cn.iocoder.yudao.framework.common.util.object.BeanUtils;
+import cn.iocoder.yudao.framework.tenant.core.context.TenantContextHolder;
 import cn.iocoder.yudao.module.iot.controller.admin.device.vo.message.IotDeviceMessagePageReqVO;
 import cn.iocoder.yudao.module.iot.controller.admin.statistics.vo.IotStatisticsDeviceMessageReqVO;
 import cn.iocoder.yudao.module.iot.controller.admin.statistics.vo.IotStatisticsDeviceMessageSummaryByDateRespVO;
@@ -327,8 +328,9 @@ public class IotDeviceMessageServiceImpl implements IotDeviceMessageService {
     @Override
     public PageResult<IotDeviceMessageDO> getDeviceMessagePage(IotDeviceMessagePageReqVO pageReqVO) {
         try {
+            Long tenantId = TenantContextHolder.getTenantId();
             IPage<IotDeviceMessageDO> page = deviceMessageMapper.selectPage(
-                    new Page<>(pageReqVO.getPageNo(), pageReqVO.getPageSize()), pageReqVO);
+                    new Page<>(pageReqVO.getPageNo(), pageReqVO.getPageSize()), pageReqVO, tenantId);
             return new PageResult<>(page.getRecords(), page.getTotal());
         } catch (Exception exception) {
             if (exception.getMessage().contains("Table does not exist")) {
@@ -343,13 +345,15 @@ public class IotDeviceMessageServiceImpl implements IotDeviceMessageService {
         if (CollUtil.isEmpty(requestIds)) {
             return ListUtil.of();
         }
-        return deviceMessageMapper.selectListByRequestIdsAndReply(deviceId, requestIds, reply);
+        return deviceMessageMapper.selectListByRequestIdsAndReply(
+                deviceId, requestIds, reply, TenantContextHolder.getTenantId());
     }
 
     @Override
     public Long getDeviceMessageCount(LocalDateTime createTime) {
         return deviceMessageMapper.selectCountByCreateTime(
-                createTime != null ? LocalDateTimeUtil.toEpochMilli(createTime) : null);
+                createTime != null ? LocalDateTimeUtil.toEpochMilli(createTime) : null,
+                TenantContextHolder.getTenantId());
     }
 
     @Override
@@ -358,7 +362,8 @@ public class IotDeviceMessageServiceImpl implements IotDeviceMessageService {
         // 1. 按小时统计，获取分项统计数据
         List<Map<String, Object>> countList = deviceMessageMapper.selectDeviceMessageCountGroupByDate(
                 LocalDateTimeUtil.toEpochMilli(reqVO.getTimes()[0]),
-                LocalDateTimeUtil.toEpochMilli(reqVO.getTimes()[1]));
+                LocalDateTimeUtil.toEpochMilli(reqVO.getTimes()[1]),
+                TenantContextHolder.getTenantId());
 
         // 2. 按照日期间隔，合并数据
         List<LocalDateTime[]> timeRanges = LocalDateTimeUtils.getDateRangeList(reqVO.getTimes()[0], reqVO.getTimes()[1],
