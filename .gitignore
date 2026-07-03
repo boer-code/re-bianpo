@@ -57,3 +57,6 @@ application-my.yaml
 /.vscode/
 /.cursor/
 /.DS_Store
+/bigscreen/
+/rebianpo-ui/
+/ruoyi-vue-pro-master-jdk17/
