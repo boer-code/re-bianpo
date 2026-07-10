@@ -56,7 +56,7 @@ public class IotDeviceMessageUtils {
      */
     @SuppressWarnings("unchecked")
     public static String getIdentifier(IotDeviceMessage message) {
-        if (message.getParams() == null) {
+        if (!(message.getParams() instanceof Map)) {
             return null;
         }
         if (StrUtil.equalsAny(message.getMethod(), IotDeviceMessageMethodEnum.EVENT_POST.getMethod(),

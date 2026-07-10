@@ -8,6 +8,7 @@ import cn.iocoder.yudao.module.iot.controller.admin.device.vo.message.IotDeviceM
 import cn.iocoder.yudao.module.iot.controller.admin.device.vo.message.IotDeviceMessageRespPairVO;
 import cn.iocoder.yudao.module.iot.controller.admin.device.vo.message.IotDeviceMessageRespVO;
 import cn.iocoder.yudao.module.iot.controller.admin.device.vo.message.IotDeviceMessageSendReqVO;
+import cn.iocoder.yudao.module.iot.controller.admin.device.vo.message.IotDeviceRawMessageSendReqVO;
 import cn.iocoder.yudao.module.iot.core.mq.message.IotDeviceMessage;
 import cn.iocoder.yudao.module.iot.dal.dataobject.device.IotDeviceMessageDO;
 import cn.iocoder.yudao.module.iot.dal.tdengine.IotDeviceMessageMapper;
@@ -86,6 +87,18 @@ public class IotDeviceMessageController {
     @PreAuthorize("@ss.hasPermission('iot:device:message-end')")
     public CommonResult<Boolean> sendDeviceMessage(@Valid @RequestBody IotDeviceMessageSendReqVO sendReqVO) {
         deviceMessageService.sendDeviceMessage(BeanUtils.toBean(sendReqVO, IotDeviceMessage.class));
+        return success(true);
+    }
+
+    @PostMapping("/send-raw")
+    @Operation(summary = "发送 Raw 设备消息", description = "透传原始 JSON 到 raw 设备")
+    @PreAuthorize("@ss.hasPermission('iot:device:message-end')")
+    public CommonResult<Boolean> sendRawDeviceMessage(@Valid @RequestBody IotDeviceRawMessageSendReqVO reqVO) {
+        IotDeviceMessage message = new IotDeviceMessage();
+        message.setDeviceId(reqVO.getDeviceId());
+        message.setMethod("thing.service.invoke");
+        message.setParams(reqVO.getPayload());
+        deviceMessageService.sendDeviceMessage(message);
         return success(true);
     }
 

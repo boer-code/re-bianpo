@@ -11,6 +11,8 @@ import io.netty.handler.codec.mqtt.MqttQoS;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 
+import java.nio.charset.StandardCharsets;
+
 /**
  * IoT 网关 MQTT 协议：下行消息处理器
  *
@@ -45,9 +47,15 @@ public class IotMqttDownstreamHandler {
                 return;
             }
 
-            // 2. 序列化消息（raw 与普通设备共用，raw 精简格式待后续约定）
-            byte[] payload = deviceMessageService.serializeDeviceMessage(message, connectionInfo.getProductKey(),
-                    connectionInfo.getDeviceName());
+            // 2. 序列化消息
+            boolean isRawDevice = mqttConfig.getRawRegisterProductKey().equals(connectionInfo.getProductKey());
+            byte[] payload;
+            if (isRawDevice && message.getParams() instanceof String rawPayload) {
+                payload = rawPayload.getBytes(StandardCharsets.UTF_8);
+            } else {
+                payload = deviceMessageService.serializeDeviceMessage(message, connectionInfo.getProductKey(),
+                        connectionInfo.getDeviceName());
+            }
             Assert.isTrue(payload != null && payload.length > 0, "消息编码结果不能为空");
 
             // 3. 构建主题：raw 产品走独立 /iot/{后4位}/down，普通设备走 Alink /sys/... 主题
@@ -87,7 +95,6 @@ public class IotMqttDownstreamHandler {
                         message.getDeviceId(), connectionInfo.getDeviceName());
                 return null;
             }
-            // TODO raw 下行 payload 精简格式待与设备端约定，当前复用通用 JSON 序列化
             return mqttConfig.buildRawTopicDown(ad[0], ad[1]);
         }
         // 3.2 普通设备：Alink 主题

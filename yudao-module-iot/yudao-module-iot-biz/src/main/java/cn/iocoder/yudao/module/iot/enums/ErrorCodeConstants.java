@@ -106,4 +106,7 @@ public interface ErrorCodeConstants {
     // ========== IoT 告警记录 1-050-014-000 ==========
     ErrorCode ALERT_RECORD_NOT_EXISTS = new ErrorCode(1_050_014_000, "IoT 告警记录不存在");
 
+    // ========== IoT 设备快捷指令 1-050-015-000 ==========
+    ErrorCode DEVICE_COMMAND_NOT_EXISTS = new ErrorCode(1_050_015_000, "设备快捷指令不存在");
+
 }
