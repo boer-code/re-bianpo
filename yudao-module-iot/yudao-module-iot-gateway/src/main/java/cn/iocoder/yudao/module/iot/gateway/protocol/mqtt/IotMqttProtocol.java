@@ -106,7 +106,7 @@ public class IotMqttProtocol implements IotProtocol {
         this.authHandler = new IotMqttAuthHandler(connectionManager, deviceMessageService, deviceApi, serverId, mqttConfig);
         this.registerHandler = new IotMqttRegisterHandler(connectionManager, deviceMessageService);
         this.upstreamHandler = new IotMqttUpstreamHandler(connectionManager, deviceMessageService, serverId);
-        this.rawUpstreamHandler = new IotMqttRawUpstreamHandler(deviceApi, deviceMessageService, mqttConfig, serverId);
+        this.rawUpstreamHandler = new IotMqttRawUpstreamHandler(deviceApi, deviceMessageService, mqttConfig, serverId, connectionManager);
     }
 
     @Override
@@ -156,7 +156,7 @@ public class IotMqttProtocol implements IotProtocol {
 
             // 2. 启动下行消息订阅者
             IotMessageBus messageBus = SpringUtil.getBean(IotMessageBus.class);
-            IotMqttDownstreamHandler downstreamHandler = new IotMqttDownstreamHandler(deviceMessageService, connectionManager);
+            IotMqttDownstreamHandler downstreamHandler = new IotMqttDownstreamHandler(deviceMessageService, connectionManager, mqttConfig);
             this.downstreamSubscriber = new IotMqttDownstreamSubscriber(this, downstreamHandler, messageBus);
             this.downstreamSubscriber.start();
         } catch (Exception e) {
@@ -223,9 +223,8 @@ public class IotMqttProtocol implements IotProtocol {
         // 1. 如果是注册请求，注册待认证连接；否则走正常认证流程
         String clientId = endpoint.clientIdentifier();
         IotMqttConfig mqttConfig = properties.getMqtt();
-        // 只从配置读取一次 rawClientId，减少重复访问
-        String rawClientId = mqttConfig.getRawClientId();
-        if (rawClientId.equals(clientId)) {
+        // raw 设备以前缀识别 clientId（约定 前缀+AN后2位+DN后2位=8位）
+        if (mqttConfig.isRawClientId(clientId)) {
             // 情况三：raw设备认证请求
             if (!authHandler.handleAdminAuthenticationRequest(endpoint)) {
                 endpoint.reject(MqttConnectReturnCode.CONNECTION_REFUSED_BAD_USER_NAME_OR_PASSWORD);
@@ -269,7 +268,7 @@ public class IotMqttProtocol implements IotProtocol {
             for (MqttTopicSubscription sub : subscribe.topicSubscriptions()) {
                 String topicName = sub.topicName();
                 // 如果设备是raw设备主题，则直接订阅
-                if (clientId.equals(mqttConfig.getRawClientId())) {
+                if (mqttConfig.isRawClientId(clientId)) {
                     grantedQoSLevels.add(sub.qualityOfService());
                     log.debug("[handleEndpoint][订阅成功，客户端 ID: {}，主题: {}]", clientId, topicName);
                     continue;
@@ -309,8 +308,8 @@ public class IotMqttProtocol implements IotProtocol {
             // 1. 处理业务消息
             String topic = message.topicName();
             byte[] payload = message.payload().getBytes();
-            if (StrUtil.equals(topic, properties.getMqtt().getRawTopicUp())) {
-                rawUpstreamHandler.handleRawPayload(payload);
+            if (properties.getMqtt().isRawTopicUp(topic)) {
+                rawUpstreamHandler.handleRawPayload(endpoint, payload);
             } else {
                 upstreamHandler.handleBusinessRequest(endpoint, topic, payload);
             }
@@ -321,7 +320,7 @@ public class IotMqttProtocol implements IotProtocol {
             log.error("[processMessage][消息处理失败，客户端 ID: {}，地址: {}，topic: {}]",
                     clientId, address, message.topicName(), e);
             // raw连接用于统一原始上报，不因单条消息失败强制断开，避免反复重连放大故障
-            if (StrUtil.equals(clientId, properties.getMqtt().getRawClientId())) {
+            if (properties.getMqtt().isRawClientId(clientId)) {
                 handleQoSAck(endpoint, message);
                 return;
             }

@@ -3,6 +3,7 @@ package cn.iocoder.yudao.module.iot.gateway.protocol.mqtt.handler.downstream;
 import cn.hutool.core.lang.Assert;
 import cn.iocoder.yudao.module.iot.core.mq.message.IotDeviceMessage;
 import cn.iocoder.yudao.module.iot.core.util.IotDeviceMessageUtils;
+import cn.iocoder.yudao.module.iot.gateway.protocol.mqtt.IotMqttConfig;
 import cn.iocoder.yudao.module.iot.gateway.protocol.mqtt.manager.IotMqttConnectionManager;
 import cn.iocoder.yudao.module.iot.gateway.service.device.message.IotDeviceMessageService;
 import cn.iocoder.yudao.module.iot.gateway.util.IotMqttTopicUtils;
@@ -23,6 +24,8 @@ public class IotMqttDownstreamHandler {
 
     private final IotMqttConnectionManager connectionManager;
 
+    private final IotMqttConfig mqttConfig;
+
     /**
      * 处理下行消息
      *
@@ -42,18 +45,16 @@ public class IotMqttDownstreamHandler {
                 return;
             }
 
-            // 2.1 序列化消息
+            // 2. 序列化消息（raw 与普通设备共用，raw 精简格式待后续约定）
             byte[] payload = deviceMessageService.serializeDeviceMessage(message, connectionInfo.getProductKey(),
                     connectionInfo.getDeviceName());
             Assert.isTrue(payload != null && payload.length > 0, "消息编码结果不能为空");
-            // 2.2 构建主题
-            Assert.notBlank(message.getMethod(), "消息方法不能为空");
-            boolean isReply = IotDeviceMessageUtils.isReplyMessage(message);
-            String topic = IotMqttTopicUtils.buildTopicByMethod(message.getMethod(), connectionInfo.getProductKey(),
-                    connectionInfo.getDeviceName(), isReply);
+
+            // 3. 构建主题：raw 产品走独立 /iot/{后4位}/down，普通设备走 Alink /sys/... 主题
+            String topic = buildDownTopic(message, connectionInfo);
             Assert.notBlank(topic, "主题不能为空");
 
-            // 3. 发送到设备
+            // 4. 发送到设备
             boolean success = connectionManager.sendToDevice(message.getDeviceId(), topic, payload,
                     MqttQoS.AT_LEAST_ONCE.value(), false);
             if (!success) {
@@ -65,6 +66,35 @@ public class IotMqttDownstreamHandler {
             log.error("[handle][处理下行消息失败，设备 ID: {}，方法: {}，消息内容: {}]",
                     message.getDeviceId(), message.getMethod(), message, e);
         }
+    }
+
+    /**
+     * 构建下行主题
+     * <p>
+     * raw 设备（productKey == rawRegisterProductKey）：从 deviceName 解析 AN/DN，拼 /iot/{后4位}/down；
+     * 普通设备：走 Alink 规范 /sys/{productKey}/{deviceName}/{method}[_reply]。
+     *
+     * @param message        设备消息
+     * @param connectionInfo 连接信息
+     * @return 下行主题；raw 设备名无法解析时返回 null
+     */
+    private String buildDownTopic(IotDeviceMessage message, IotMqttConnectionManager.ConnectionInfo connectionInfo) {
+        // 3.1 raw 设备：独立下行 topic
+        if (mqttConfig.getRawRegisterProductKey().equals(connectionInfo.getProductKey())) {
+            String[] ad = IotMqttTopicUtils.parseRawAreaAndDeviceNo(connectionInfo.getDeviceName());
+            if (ad == null) {
+                log.warn("[buildDownTopic][raw 设备 deviceName 无法解析 AN/DN，设备 ID: {}，deviceName: {}]",
+                        message.getDeviceId(), connectionInfo.getDeviceName());
+                return null;
+            }
+            // TODO raw 下行 payload 精简格式待与设备端约定，当前复用通用 JSON 序列化
+            return mqttConfig.buildRawTopicDown(ad[0], ad[1]);
+        }
+        // 3.2 普通设备：Alink 主题
+        Assert.notBlank(message.getMethod(), "消息方法不能为空");
+        boolean isReply = IotDeviceMessageUtils.isReplyMessage(message);
+        return IotMqttTopicUtils.buildTopicByMethod(message.getMethod(), connectionInfo.getProductKey(),
+                connectionInfo.getDeviceName(), isReply);
     }
 
 }

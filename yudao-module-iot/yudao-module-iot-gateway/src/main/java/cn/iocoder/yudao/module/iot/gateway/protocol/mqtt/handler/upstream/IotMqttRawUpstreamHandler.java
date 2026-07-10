@@ -17,7 +17,9 @@ import cn.iocoder.yudao.module.iot.core.mq.message.IotDeviceMessage;
 import cn.iocoder.yudao.module.iot.core.topic.property.IotDevicePropertyPostReqDTO;
 import cn.iocoder.yudao.module.iot.core.topic.state.IotDeviceStateUpdateReqDTO;
 import cn.iocoder.yudao.module.iot.gateway.protocol.mqtt.IotMqttConfig;
+import cn.iocoder.yudao.module.iot.gateway.protocol.mqtt.manager.IotMqttConnectionManager;
 import cn.iocoder.yudao.module.iot.gateway.service.device.message.IotDeviceMessageService;
+import io.vertx.mqtt.MqttEndpoint;
 import lombok.extern.slf4j.Slf4j;
 
 import java.math.BigDecimal;
@@ -44,19 +46,22 @@ public class IotMqttRawUpstreamHandler {
     private final IotDeviceMessageService deviceMessageService;
     private final IotMqttConfig mqttConfig;
     private final String serverId;
+    private final IotMqttConnectionManager connectionManager;
 
     public IotMqttRawUpstreamHandler(IotDeviceCommonApi deviceApi,
                                      IotDeviceMessageService deviceMessageService,
                                      IotMqttConfig mqttConfig,
-                                     String serverId) {
+                                     String serverId,
+                                     IotMqttConnectionManager connectionManager) {
         this.deviceApi = deviceApi;
         this.deviceMessageService = deviceMessageService;
         this.mqttConfig = mqttConfig;
         this.serverId = serverId;
+        this.connectionManager = connectionManager;
     }
 
     @SuppressWarnings("unchecked")
-    public void handleRawPayload(byte[] payload) {
+    public void handleRawPayload(MqttEndpoint endpoint, byte[] payload) {
         Map<String, Object> payloadMap = JsonUtils.parseObject(payload, Map.class);
         if (MapUtil.isEmpty(payloadMap)) {
             return;
@@ -85,6 +90,9 @@ public class IotMqttRawUpstreamHandler {
             return;
         }
 
+        // 1.1 绑定连接到设备（幂等：首次上报或 deviceId 变化时才注册，便于后续下行与离线感知）
+        bindConnectionIfNeed(endpoint, device);
+
         // 统一解析设备上报时间（优先 DAY+TIM），用于补发缓存数据按真实采集时间入库
         LocalDateTime reportTime = resolveReportTime(payloadMap, device.getId(), areaNo, deviceNo);
         LocalDateTime serverReceiveTime = LocalDateTime.now();
@@ -97,8 +105,8 @@ public class IotMqttRawUpstreamHandler {
                     .setReportTime(reportTime);
             log.info("[handleRawPayload][心跳上报 ONLINE deviceId={} AN={} DN={} deviceReportTime={} serverReceiveTime={}]",
                     device.getId(), areaNo, deviceNo, reportTime, serverReceiveTime);
-            // RAW 设备上报 topic 固定、无连接上下文，避免 biz 侧生成 reply 后下发失败日志，serverId 置空
-            deviceMessageService.sendDeviceMessage(heartbeatMessage, device.getProductKey(), device.getDeviceName(), null);
+            // 传真实 serverId，便于 biz 侧生成 reply 并路由下行到本网关
+            deviceMessageService.sendDeviceMessage(heartbeatMessage, device.getProductKey(), device.getDeviceName(), serverId);
             return;
         }
 
@@ -185,8 +193,26 @@ public class IotMqttRawUpstreamHandler {
         log.info("[handleRawPayload][thing.property.post 最终上报 params={} deviceId={} deviceReportTime={} serverReceiveTime={}]",
                 JsonUtils.toJsonString(properties),
                 device.getId(), reportTime, serverReceiveTime);
-        // RAW 设备上报 topic 固定、无连接上下文，避免 biz 侧生成 reply 后下发失败日志，serverId 置空
-        deviceMessageService.sendDeviceMessage(message, device.getProductKey(), device.getDeviceName(), null);
+        // 传真实 serverId，打通 reply 回执与主动下行
+        deviceMessageService.sendDeviceMessage(message, device.getProductKey(), device.getDeviceName(), serverId);
+    }
+
+    /**
+     * 幂等绑定连接到设备：首次上报或 deviceId 变化时才注册，避免每条消息重复打注册日志。
+     * 注册后下行处理器可通过 deviceId 找到 endpoint，连接关闭时 cleanupConnection 可正确感知离线。
+     */
+    private void bindConnectionIfNeed(MqttEndpoint endpoint, IotDeviceRespDTO device) {
+        IotMqttConnectionManager.ConnectionInfo existing = connectionManager.getConnectionInfo(endpoint);
+        if (existing != null && existing.getDeviceId() != null
+                && existing.getDeviceId().equals(device.getId())) {
+            return;
+        }
+        IotMqttConnectionManager.ConnectionInfo connectionInfo = new IotMqttConnectionManager.ConnectionInfo()
+                .setDeviceId(device.getId())
+                .setProductKey(device.getProductKey())
+                .setDeviceName(device.getDeviceName())
+                .setRemoteAddress(connectionManager.getEndpointAddress(endpoint));
+        connectionManager.registerConnection(endpoint, connectionInfo);
     }
 
     /**

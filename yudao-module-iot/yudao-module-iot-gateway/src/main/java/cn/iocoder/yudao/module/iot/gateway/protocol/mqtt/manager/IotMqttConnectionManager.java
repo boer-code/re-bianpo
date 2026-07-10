@@ -73,23 +73,16 @@ public class IotMqttConnectionManager {
 
     /**
      * 注册设备连接（包含认证信息）
+     * <p>
+     * 短连接模式：设备每分钟新建连接上报后即断开，不做“断开旧连接”处理，
+     * 旧连接由其自身的 closeHandler 自然清理，避免打断设备正常的短连接节奏。
      *
      * @param endpoint       MQTT 连接端点
      * @param connectionInfo 连接信息
      */
     public void registerConnection(MqttEndpoint endpoint, ConnectionInfo connectionInfo) {
         Long deviceId = connectionInfo.getDeviceId();
-        // 如果设备已有其他连接，先清理旧连接
-        MqttEndpoint oldEndpoint = deviceEndpointMap.get(deviceId);
-        if (oldEndpoint != null && oldEndpoint != endpoint) {
-            log.info("[registerConnection][设备已有其他连接，断开旧连接，设备 ID: {}，旧连接: {}]",
-                    deviceId, getEndpointAddress(oldEndpoint));
-            // 先清理映射，再关闭连接（避免旧连接处理器干扰）
-            connectionMap.remove(oldEndpoint);
-            oldEndpoint.close();
-        }
-
-        // 注册新连接
+        // 注册新连接（新连接覆盖 deviceId 映射，旧连接的 unregisterConnection 会条件跳过）
         connectionMap.put(endpoint, connectionInfo);
         deviceEndpointMap.put(deviceId, endpoint);
         log.info("[registerConnection][注册设备连接，设备 ID: {}，连接: {}，productKey: {}，deviceName: {}]",
@@ -107,7 +100,8 @@ public class IotMqttConnectionManager {
             return;
         }
         Long deviceId = connectionInfo.getDeviceId();
-        deviceEndpointMap.remove(deviceId);
+        // 条件移除：仅当 deviceId 仍指向本 endpoint 时才清除，避免短连接重连后旧连接关闭误清新连接映射
+        deviceEndpointMap.remove(deviceId, endpoint);
         log.info("[unregisterConnection][注销设备连接，设备 ID: {}，连接: {}]", deviceId, getEndpointAddress(endpoint));
     }
 

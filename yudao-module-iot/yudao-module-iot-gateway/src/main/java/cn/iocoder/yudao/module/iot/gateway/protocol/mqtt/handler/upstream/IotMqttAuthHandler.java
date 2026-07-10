@@ -126,7 +126,8 @@ public class IotMqttAuthHandler extends IotMqttAbstractHandler {
         String password = endpoint.auth() != null ? endpoint.auth().getPassword() : null;
         log.debug("[handleAdminAuthenticationRequest][raw设备认证请求，客户端 ID: {}，用户名: {}，地址: {}]",
                 clientId, username, connectionManager.getEndpointAddress(endpoint));
-        if (!mqttConfig.getRawClientId().equals(clientId)) {
+        // raw 设备 clientId 以前缀识别（约定前缀+AN后2位+DN后2位=8位），username/password 仍固定
+        if (!mqttConfig.isRawClientId(clientId)) {
             return false;
         }
         if (!mqttConfig.getRawUsername().equals(username)) {

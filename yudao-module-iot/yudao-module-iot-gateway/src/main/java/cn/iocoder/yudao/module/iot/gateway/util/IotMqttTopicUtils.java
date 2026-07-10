@@ -141,4 +141,27 @@ public final class IotMqttTopicUtils {
         return topic.startsWith(deviceTopicPrefix);
     }
 
+    // ========== Raw 设备 topic 工具 ==========
+
+    /**
+     * 从 raw 设备 deviceName（格式 {@code raw_{AN}_{DN}[_suffix]}）解析出 [areaNo, deviceNo]
+     * <p>
+     * 自动注册时 deviceName 约定为 {@code raw_{AN}_{DN}}；当唯一键冲突时会追加 {@code _{suffix}}，
+     * 本方法只取前两段，忽略后缀。
+     *
+     * @param deviceName 设备名称
+     * @return [areaNo, deviceNo]；非 raw 设备名或格式不符返回 null
+     */
+    public static String[] parseRawAreaAndDeviceNo(String deviceName) {
+        if (StrUtil.isBlank(deviceName) || !deviceName.startsWith("raw_")) {
+            return null;
+        }
+        String rest = deviceName.substring("raw_".length());
+        String[] parts = rest.split("_");
+        if (parts.length < 2 || StrUtil.hasBlank(parts[0], parts[1])) {
+            return null;
+        }
+        return new String[]{parts[0], parts[1]};
+    }
+
 }
